@@ -249,6 +249,7 @@ select option{background:#1c1c22}
 
       <div class="sec-t">桌面宠物</div>
       <div class="row"><div><div class="lab">显示宠物</div><div class="hint">素材 © PC2005-cloud/dsh-pet，禁止商用</div></div><button class="sw" id="pOn"></button></div>
+      <div class="row"><div class="lab">可用区域</div><div id="petDbg" style="font-size:12px;color:#8b8b95">—</div></div>
       <div class="row"><div class="lab">大小</div><div style="display:flex;align-items:center;gap:9px">
         <input type="range" id="pSize" min="80" max="700" step="10">
         <input type="number" id="pSizeN" min="60" max="1200" step="10" style="width:76px;max-width:76px;text-align:center">
@@ -276,7 +277,7 @@ select option{background:#1c1c22}
 
 <script>
 "use strict";
-const VER = '2026-11-03.12';
+const VER = '2026-11-03.13';
 /* ============================================================
    图帧 —— 全屏图片 + 可自定义时钟
    ============================================================ */
@@ -1287,6 +1288,10 @@ function syncUI(){
   $('#sWake').classList.toggle('on', cfg.wake);
   $('#sBurn').classList.toggle('on', cfg.burn);
   $('#pOn').classList.toggle('on', cfg.pet.on);
+  const _b = stageBox();
+  const _d = $('#petDbg');
+  if (_d) _d.textContent = Math.round(_b.width) + ' × ' + Math.round(_b.height)
+    + ' ｜ 视图 ' + window.innerWidth + ' × ' + window.innerHeight;
   $('#pSize').value = Math.min(700, cfg.pet.size);
   $('#pSizeN').value = cfg.pet.size;
   $('#sNight').classList.toggle('on', cfg.night.on);
@@ -1525,13 +1530,22 @@ function petSync(){
   petCycle();
 }
 
+/* 以舞台实际尺寸为坐标系（window.innerWidth 在 PWA 里常与它不一致） */
+function stageBox(){
+  const st = document.getElementById('stage');
+  const b = st ? st.getBoundingClientRect() : null;
+  if (b && b.width > 0 && b.height > 0) return b;
+  return { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+}
+
 /* 甩出去：重力 + 碰边反弹 + 摩擦 */
 let petRaf = 0;
 function petThrow(vx, vy){
   const v = $('#pet');
   cancelAnimationFrame(petRaf);
   const r = v.getBoundingClientRect();
-  let x = r.left, y = r.top;
+  const box0 = stageBox();
+  let x = r.left - box0.left, y = r.top - box0.top;
   const w = r.width, h = r.height;
   let last = performance.now();
   const G = 1.05, DRAG = 0.988, BOUNCE = 0.58;
@@ -1540,7 +1554,7 @@ function petThrow(vx, vy){
     const dt = Math.min(42, t - last) / 16.67; last = t;
     vy += G * dt;
     x += vx * dt; y += vy * dt;
-    const W = innerWidth, H = innerHeight;
+    const W = box0.width, H = box0.height;
     if (x < 0){ x = 0; vx = -vx * BOUNCE; }
     if (x > W - w){ x = W - w; vx = -vx * BOUNCE; }
     if (y < 0){ y = 0; vy = -vy * BOUNCE; }
@@ -1576,8 +1590,8 @@ function petThrow(vx, vy){
     if (!cfg.pet.on) return;
     cancelAnimationFrame(petRaf); petRaf = 0;
     dragging = true; moved = false;
-    const r = rect();
-    ox = r.left; oy = r.top; sx = e.clientX; sy = e.clientY;
+    const r = rect(), box = stageBox();
+    ox = r.left - box.left; oy = r.top - box.top; sx = e.clientX; sy = e.clientY;
     lastX = e.clientX; lastY = e.clientY; lastT = performance.now();
     vx = 0; vy = 0;
     v.classList.add('dragging');
@@ -1590,11 +1604,11 @@ function petThrow(vx, vy){
     if (!dragging) return;
     const dx = e.clientX - sx, dy = e.clientY - sy;
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
-    const r = rect();
+    const r = rect(), box = stageBox();
     const w = r.width || v.offsetWidth || 150;
     const h = r.height || v.offsetHeight || 150;
-    const nx = Math.max(0, Math.min(window.innerWidth - w, ox + dx));
-    const ny = Math.max(0, Math.min(window.innerHeight - h, oy + dy));
+    const nx = Math.max(0, Math.min(box.width - w, ox + dx));
+    const ny = Math.max(0, Math.min(box.height - h, oy + dy));
     v.style.right = 'auto'; v.style.bottom = 'auto';
     v.style.left = nx + 'px'; v.style.top = ny + 'px';
     const now = performance.now();
@@ -1619,8 +1633,8 @@ function petThrow(vx, vy){
           else setTimeout(petCycle, 400);
         });
       } else {
-        const r = rect();
-        cfg.pet.x = Math.round(r.left); cfg.pet.y = Math.round(r.top); saveCfg();
+        const r = rect(), box = stageBox();
+        cfg.pet.x = Math.round(r.left - box.left); cfg.pet.y = Math.round(r.top - box.top); saveCfg();
         setTimeout(petCycle, 700);
       }
     } else {
