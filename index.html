@@ -231,6 +231,7 @@ select option{background:#1c1c22}
       <div class="row"><div><div class="lab">屏幕方向</div><div class="hint">浏览器允许时生效，失败请用手机系统的自动旋转开关</div></div><div class="seg" id="segOrient"></div></div>
       <div class="row"><div class="lab">屏幕常亮</div><div class="hint" style="text-align:right">浏览器支持时生效</div><button class="sw" id="sWake"></button></div>
       <div class="row"><div class="lab">显示图片信息</div><button class="sw" id="sInfo"></button></div>
+      <div class="row"><div><div class="lab">强制更新</div><div class="hint">发现版本号没变时点它：注销离线缓存并重载，图片不受影响</div></div><button class="btn wide" id="bReload">更新</button></div>
       <div class="row"><div class="lab danger">清空全部图片</div><button class="btn wide danger" id="bClear" style="background:rgba(255,80,80,.14)">清空</button></div>
       <div id="verLine" style="color:#8e8e9a;font-size:12px;margin-top:26px;padding-top:14px;
         border-top:1px solid rgba(255,255,255,.08);letter-spacing:.04em">版本 —</div>
@@ -248,7 +249,7 @@ select option{background:#1c1c22}
 
 <script>
 "use strict";
-const VER = '2026-11-03.3';
+const VER = '2026-11-03.4';
 /* ============================================================
    图帧 —— 全屏图片 + 可自定义时钟
    ============================================================ */
@@ -1057,6 +1058,20 @@ $('#bFull').addEventListener('click', async () => {
   } catch(e){ toast('这台浏览器不让全屏'); }
 });
 $('#bLock').addEventListener('click', () => setLocked(true));
+$('#bReload').addEventListener('click', async () => {
+  toast('正在清缓存…');
+  try {
+    if ('serviceWorker' in navigator){
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) await r.unregister();
+    }
+    if ('caches' in window){
+      const keys = await caches.keys();
+      for (const k of keys) await caches.delete(k);
+    }
+  } catch(e){}
+  setTimeout(() => location.replace(location.pathname + '?u=' + Date.now()), 400);
+});
 $('#bClear').addEventListener('click', async () => {
   if (!confirm('确定清空全部图片？这个操作不能撤销。')) return;
   state.photos.forEach(p => { if (p.url.startsWith('blob:')) URL.revokeObjectURL(p.url); });
