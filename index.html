@@ -250,7 +250,9 @@ select option{background:#1c1c22}
       <div class="sec-t">桌面宠物</div>
       <div class="row"><div><div class="lab">显示宠物</div><div class="hint">素材 © PC2005-cloud/dsh-pet，禁止商用</div></div><button class="sw" id="pOn"></button></div>
       <div class="row"><div class="lab">大小</div><div style="display:flex;align-items:center;gap:9px">
-        <input type="range" id="pSize" min="80" max="260" step="10"><span id="vSize2" style="font-size:13px;color:#9a9aa4;width:42px;text-align:right"></span></div></div>
+        <input type="range" id="pSize" min="80" max="700" step="10">
+        <input type="number" id="pSizeN" min="60" max="1200" step="10" style="width:76px;max-width:76px;text-align:center">
+        <span style="font-size:12px;color:#8b8b95">px</span></div></div>
 
       <div class="sec-t">其他</div>
       <div class="row"><div><div class="lab">屏幕方向</div><div class="hint">浏览器允许时生效，失败请用手机系统的自动旋转开关</div></div><div class="seg" id="segOrient"></div></div>
@@ -274,7 +276,7 @@ select option{background:#1c1c22}
 
 <script>
 "use strict";
-const VER = '2026-11-03.10';
+const VER = '2026-11-03.11';
 /* ============================================================
    图帧 —— 全屏图片 + 可自定义时钟
    ============================================================ */
@@ -1285,8 +1287,8 @@ function syncUI(){
   $('#sWake').classList.toggle('on', cfg.wake);
   $('#sBurn').classList.toggle('on', cfg.burn);
   $('#pOn').classList.toggle('on', cfg.pet.on);
-  $('#pSize').value = cfg.pet.size;
-  $('#vSize2').textContent = cfg.pet.size + 'px';
+  $('#pSize').value = Math.min(700, cfg.pet.size);
+  $('#pSizeN').value = cfg.pet.size;
   $('#sNight').classList.toggle('on', cfg.night.on);
   $('#nStart').value = cfg.night.start;
   $('#nEnd').value = cfg.night.end;
@@ -1333,12 +1335,17 @@ $('#sInt').addEventListener('input', e => {
 bindSw('#sPlay', () => cfg.playing, v => { cfg.playing = v; schedule(); });
 bindSw('#sKB', () => cfg.kb, v => { cfg.kb = v; showPhoto(state.idx, false); });
 bindSw('#pOn', () => cfg.pet.on, v => { cfg.pet.on = v; petSync(); });
-$('#pSize').addEventListener('input', e => {
-  cfg.pet.size = +e.target.value;
-  $('#vSize2').textContent = cfg.pet.size + 'px';
-  if (cfg.pet.on) $('#pet').style.width = cfg.pet.size + 'px';
+function setPetSize(n){
+  n = Math.max(60, Math.min(1200, isFinite(n) ? Math.round(n) : 150));
+  cfg.pet.size = n;
+  $('#pSize').value = Math.min(700, n);
+  $('#pSizeN').value = n;
+  const v = $('#pet');
+  if (v) v.style.width = n + 'px';
   saveCfg();
-});
+}
+$('#pSize').addEventListener('input', e => setPetSize(+e.target.value));
+$('#pSizeN').addEventListener('change', e => setPetSize(+e.target.value));
 bindSw('#sBurn', () => cfg.burn, v => { cfg.burn = v; if (v) burnShift(); else { $('#clock').style.setProperty('--sx','0px'); $('#clock').style.setProperty('--sy','0px'); } });
 bindSw('#sNight', () => cfg.night.on, v => { cfg.night.on = v; nightTick(); });
 $('#nStart').addEventListener('change', e => { cfg.night.start = e.target.value; saveCfg(); nightTick(); });
@@ -1460,17 +1467,32 @@ function dataURLtoBlob(d){
 /* ============================================================
    桌面宠物（素材来自 PC2005-cloud/dsh-pet，禁止商用）
    ============================================================ */
-const PET_FILES = {
-  idle: 'pet/idle.webm',
-  acts: ['pet/act1.webm', 'pet/act2.webm', 'pet/act3.webm'],
-  clicks: ['pet/click1.webm', 'pet/click2.webm']
-};
-let petToken = 0;
+let PET_POOL = null;
+function petPool(){
+  if (PET_POOL) return Promise.resolve(PET_POOL);
+  return fetch('pet/list.json', { cache: 'force-cache' })
+    .then(r => r.json())
+    .then(j => {
+      PET_POOL = {
+        act: j.files.filter(x => x.t === 'act'),
+        click: j.files.filter(x => x.t === 'click'),
+        drag: j.files.filter(x => x.t === 'drag')
+      };
+      if (!PET_POOL.act.length) throw new Error('empty');
+      return PET_POOL;
+    })
+    .catch(() => {
+      PET_POOL = { act: [{ f: 'p001.webm' }], click: [{ f: 'p001.webm' }], drag: [] };
+      return PET_POOL;
+    });
+}
+const petRand = a => a[Math.floor(Math.random() * a.length)];
 
-function petPlay(src, onEnd){
+let petToken = 0;
+function petPlay(file, onEnd){
   const v = $('#pet');
   const my = ++petToken;
-  try { v.src = src; } catch(e){}
+  v.src = 'pet/' + file;
   const done = () => {
     v.removeEventListener('ended', done);
     if (my === petToken && onEnd) onEnd();
@@ -1479,13 +1501,11 @@ function petPlay(src, onEnd){
   const pr = v.play();
   if (pr && pr.catch) pr.catch(() => {});
 }
-function petCycle(){
+async function petCycle(){
   if (!cfg.pet.on) return;
-  const src = Math.random() < 0.45 ? PET_FILES.idle
-    : PET_FILES.acts[Math.floor(Math.random() * PET_FILES.acts.length)];
-  petPlay(src, () => {
-    const wait = 2000 + Math.random() * 5000;
-    setTimeout(() => { if (cfg.pet.on) petCycle(); }, wait);
+  const pool = await petPool();
+  petPlay(petRand(pool.act).f, () => {
+    setTimeout(() => { if (cfg.pet.on) petCycle(); }, 1800 + Math.random() * 4000);
   });
 }
 function petSync(){
@@ -1500,19 +1520,63 @@ function petSync(){
     v.style.top = cfg.pet.y + 'px';
   } else {
     v.style.left = ''; v.style.top = '';
-    v.style.right = '14px'; v.style.bottom = 'calc(86px + var(--safe-b))';
+    v.style.right = '16px'; v.style.bottom = 'calc(90px + var(--safe-b))';
   }
   petCycle();
 }
+
+/* 甩出去：重力 + 碰边反弹 + 摩擦 */
+let petRaf = 0;
+function petThrow(vx, vy){
+  const v = $('#pet');
+  cancelAnimationFrame(petRaf);
+  const r = v.getBoundingClientRect();
+  let x = r.left, y = r.top;
+  const w = r.width, h = r.height;
+  let last = performance.now();
+  const G = 1.05, DRAG = 0.988, BOUNCE = 0.58;
+  v.style.right = 'auto'; v.style.bottom = 'auto';
+  function step(t){
+    const dt = Math.min(42, t - last) / 16.67; last = t;
+    vy += G * dt;
+    x += vx * dt; y += vy * dt;
+    const W = innerWidth, H = innerHeight;
+    if (x < 0){ x = 0; vx = -vx * BOUNCE; }
+    if (x > W - w){ x = W - w; vx = -vx * BOUNCE; }
+    if (y < 0){ y = 0; vy = -vy * BOUNCE; }
+    if (y > H - h){
+      y = H - h;
+      vy = -vy * BOUNCE;
+      if (Math.abs(vy) < 2.4) vy = 0;
+      vx *= 0.94;
+    }
+    vx *= DRAG;
+    v.style.left = x + 'px'; v.style.top = y + 'px';
+    if (Math.abs(vx) < 0.12 && Math.abs(vy) < 0.12 && y >= H - h - 0.5){
+      cfg.pet.x = Math.round(x); cfg.pet.y = Math.round(y); saveCfg();
+      petRaf = 0;
+      if (cfg.pet.on) setTimeout(petCycle, 600);
+      return;
+    }
+    petRaf = requestAnimationFrame(step);
+  }
+  petRaf = requestAnimationFrame(step);
+}
+
+/* 拖拽 / 甩出 / 点击 */
 (function(){
   const v = $('#pet');
   let dragging = false, moved = false, sx = 0, sy = 0, ox = 0, oy = 0;
+  let lastX = 0, lastY = 0, lastT = 0, vx = 0, vy = 0;
   v.addEventListener('pointerdown', e => {
     if (!cfg.pet.on) return;
+    cancelAnimationFrame(petRaf); petRaf = 0;
     dragging = true; moved = false;
     v.setPointerCapture(e.pointerId);
     const r = v.getBoundingClientRect();
     ox = r.left; oy = r.top; sx = e.clientX; sy = e.clientY;
+    lastX = e.clientX; lastY = e.clientY; lastT = performance.now();
+    vx = 0; vy = 0;
     v.classList.add('dragging');
     e.stopPropagation(); e.preventDefault();
   });
@@ -1524,6 +1588,11 @@ function petSync(){
     const ny = Math.max(0, Math.min(innerHeight - v.offsetHeight, oy + dy));
     v.style.right = 'auto'; v.style.bottom = 'auto';
     v.style.left = nx + 'px'; v.style.top = ny + 'px';
+    const now = performance.now();
+    const dt = Math.max(8, now - lastT);
+    vx = (e.clientX - lastX) / dt * 16;
+    vy = (e.clientY - lastY) / dt * 16;
+    lastX = e.clientX; lastY = e.clientY; lastT = now;
     e.stopPropagation();
   });
   v.addEventListener('pointerup', e => {
@@ -1531,11 +1600,17 @@ function petSync(){
     dragging = false;
     v.classList.remove('dragging');
     if (moved){
-      const r = v.getBoundingClientRect();
-      cfg.pet.x = Math.round(r.left); cfg.pet.y = Math.round(r.top); saveCfg();
+      if (Math.hypot(vx, vy) > 2.2){
+        petThrow(vx * 1.25, vy * 1.25);
+        petPool().then(p => {
+          if (p.drag.length) petPlay(p.drag[0].f, () => setTimeout(petCycle, 500));
+        });
+      } else {
+        const r = v.getBoundingClientRect();
+        cfg.pet.x = Math.round(r.left); cfg.pet.y = Math.round(r.top); saveCfg();
+      }
     } else {
-      const src = PET_FILES.clicks[Math.floor(Math.random() * PET_FILES.clicks.length)];
-      petPlay(src, () => setTimeout(petCycle, 500));
+      petPool().then(p => petPlay(petRand(p.click).f, () => setTimeout(petCycle, 400)));
     }
     e.stopPropagation();
   });

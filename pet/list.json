@@ -1,0 +1,550 @@
+{
+"v": 1,
+"files": [
+{
+"f": "p001.webm",
+"n": "三球抛接.webm",
+"t": "act"
+},
+{
+"f": "p002.webm",
+"n": "下五子棋.webm",
+"t": "act"
+},
+{
+"f": "p003.webm",
+"n": "东张西望.webm",
+"t": "act"
+},
+{
+"f": "p004.webm",
+"n": "中秋赏月吃月饼.webm",
+"t": "act"
+},
+{
+"f": "p005.webm",
+"n": "优雅女仆舞.webm",
+"t": "act"
+},
+{
+"f": "p006.webm",
+"n": "余额-分文不剩.webm",
+"t": "balance"
+},
+{
+"f": "p007.webm",
+"n": "余额-数金皱眉.webm",
+"t": "balance"
+},
+{
+"f": "p008.webm",
+"n": "余额-袋空如洗.webm",
+"t": "balance"
+},
+{
+"f": "p009.webm",
+"n": "余额-金袋叮当.webm",
+"t": "balance"
+},
+{
+"f": "p010.webm",
+"n": "余额-钱袋如常.webm",
+"t": "balance"
+},
+{
+"f": "p011.webm",
+"n": "余额-钱袋满溢.webm",
+"t": "balance"
+},
+{
+"f": "p012.webm",
+"n": "偷吃零食被抓住.webm",
+"t": "act"
+},
+{
+"f": "p013.webm",
+"n": "写代码.webm",
+"t": "act"
+},
+{
+"f": "p014.webm",
+"n": "写福字.webm",
+"t": "act"
+},
+{
+"f": "p015.webm",
+"n": "凭空生花.webm",
+"t": "act"
+},
+{
+"f": "p016.webm",
+"n": "动物环绕.webm",
+"t": "act"
+},
+{
+"f": "p017.webm",
+"n": "原地专心玩魔方.webm",
+"t": "act"
+},
+{
+"f": "p018.webm",
+"n": "原地小憩沉眠.webm",
+"t": "act"
+},
+{
+"f": "p019.webm",
+"n": "原地左转奔跑.webm",
+"t": "act"
+},
+{
+"f": "p020.webm",
+"n": "原地敲击桌面互动.webm",
+"t": "act"
+},
+{
+"f": "p021.webm",
+"n": "原地漂浮踏步.webm",
+"t": "act"
+},
+{
+"f": "p022.webm",
+"n": "原地跳跃抓碎头顶物品.webm",
+"t": "act"
+},
+{
+"f": "p023.webm",
+"n": "原地蹲下玩玩具汽车.webm",
+"t": "act"
+},
+{
+"f": "p024.webm",
+"n": "原地重力下蹲压缩.webm",
+"t": "act"
+},
+{
+"f": "p025.webm",
+"n": "变鸽子.webm",
+"t": "act"
+},
+{
+"f": "p026.webm",
+"n": "可爱宅舞.webm",
+"t": "act"
+},
+{
+"f": "p027.webm",
+"n": "吃Token.webm",
+"t": "act"
+},
+{
+"f": "p028.webm",
+"n": "吃冰淇淋融化.webm",
+"t": "act"
+},
+{
+"f": "p029.webm",
+"n": "吃午餐.webm",
+"t": "act"
+},
+{
+"f": "p030.webm",
+"n": "吃大闸蟹.webm",
+"t": "act"
+},
+{
+"f": "p031.webm",
+"n": "吃年糕.webm",
+"t": "act"
+},
+{
+"f": "p032.webm",
+"n": "吃早餐.webm",
+"t": "act"
+},
+{
+"f": "p033.webm",
+"n": "吃晚餐.webm",
+"t": "act"
+},
+{
+"f": "p034.webm",
+"n": "吃汤圆.webm",
+"t": "act"
+},
+{
+"f": "p035.webm",
+"n": "吃白饭.webm",
+"t": "act"
+},
+{
+"f": "p036.webm",
+"n": "吃粽子.webm",
+"t": "act"
+},
+{
+"f": "p037.webm",
+"n": "吃糖葫芦.webm",
+"t": "act"
+},
+{
+"f": "p038.webm",
+"n": "吃腊八粥.webm",
+"t": "act"
+},
+{
+"f": "p039.webm",
+"n": "吃西瓜.webm",
+"t": "act"
+},
+{
+"f": "p040.webm",
+"n": "吃重阳糕.webm",
+"t": "act"
+},
+{
+"f": "p041.webm",
+"n": "吃长寿面.webm",
+"t": "act"
+},
+{
+"f": "p042.webm",
+"n": "吃青团.webm",
+"t": "act"
+},
+{
+"f": "p043.webm",
+"n": "吃饺子.webm",
+"t": "act"
+},
+{
+"f": "p044.webm",
+"n": "吹气球.webm",
+"t": "act"
+},
+{
+"f": "p045.webm",
+"n": "吹笛子.webm",
+"t": "act"
+},
+{
+"f": "p046.webm",
+"n": "哈欠连天.webm",
+"t": "act"
+},
+{
+"f": "p047.webm",
+"n": "堆雪人.webm",
+"t": "act"
+},
+{
+"f": "p048.webm",
+"n": "大口吃零食.webm",
+"t": "act"
+},
+{
+"f": "p049.webm",
+"n": "女仆屈膝礼仪.webm",
+"t": "act"
+},
+{
+"f": "p050.webm",
+"n": "小幅度原地360度旋转展示.webm",
+"t": "act"
+},
+{
+"f": "p051.webm",
+"n": "小提琴演奏.webm",
+"t": "act"
+},
+{
+"f": "p052.webm",
+"n": "工作状态-原地踱步张望.webm",
+"t": "act"
+},
+{
+"f": "p053.webm",
+"n": "工作状态-垂头叹气冒汗.webm",
+"t": "act"
+},
+{
+"f": "p054.webm",
+"n": "工作状态-忙碌点按.webm",
+"t": "act"
+},
+{
+"f": "p055.webm",
+"n": "工作状态-思考冒泡.webm",
+"t": "act"
+},
+{
+"f": "p056.webm",
+"n": "工作状态-清点归档.webm",
+"t": "act"
+},
+{
+"f": "p057.webm",
+"n": "工作状态-雀跃庆祝.webm",
+"t": "act"
+},
+{
+"f": "p058.webm",
+"n": "待机呼吸休闲.webm",
+"t": "act"
+},
+{
+"f": "p059.webm",
+"n": "悠闲哼歌.webm",
+"t": "act"
+},
+{
+"f": "p060.webm",
+"n": "扑克魔术.webm",
+"t": "act"
+},
+{
+"f": "p061.webm",
+"n": "打瞌睡被惊醒.webm",
+"t": "act"
+},
+{
+"f": "p062.webm",
+"n": "抽陀螺.webm",
+"t": "act"
+},
+{
+"f": "p063.webm",
+"n": "拆礼物.webm",
+"t": "act"
+},
+{
+"f": "p064.webm",
+"n": "插茱萸赏菊.webm",
+"t": "act"
+},
+{
+"f": "p065.webm",
+"n": "摇扇纳凉.webm",
+"t": "act"
+},
+{
+"f": "p066.webm",
+"n": "撸猫.webm",
+"t": "act"
+},
+{
+"f": "p067.webm",
+"n": "收红包.webm",
+"t": "act"
+},
+{
+"f": "p068.webm",
+"n": "放孔明灯.webm",
+"t": "act"
+},
+{
+"f": "p069.webm",
+"n": "放河灯.webm",
+"t": "act"
+},
+{
+"f": "p070.webm",
+"n": "放烟花.webm",
+"t": "act"
+},
+{
+"f": "p071.webm",
+"n": "放风筝.webm",
+"t": "act"
+},
+{
+"f": "p072.webm",
+"n": "整体换装试色.webm",
+"t": "act"
+},
+{
+"f": "p073.webm",
+"n": "是啊，吃什么.webm",
+"t": "act"
+},
+{
+"f": "p074.webm",
+"n": "晨间刷牙.webm",
+"t": "act"
+},
+{
+"f": "p075.webm",
+"n": "涮火锅.webm",
+"t": "act"
+},
+{
+"f": "p076.webm",
+"n": "深度思考碎碎念.webm",
+"t": "act"
+},
+{
+"f": "p077.webm",
+"n": "点击回应-傲娇生气.webm",
+"t": "click"
+},
+{
+"f": "p078.webm",
+"n": "点击回应-元气挥手.webm",
+"t": "click"
+},
+{
+"f": "p079.webm",
+"n": "点击回应-害羞惊讶.webm",
+"t": "click"
+},
+{
+"f": "p080.webm",
+"n": "点击回应-开心跃动.webm",
+"t": "click"
+},
+{
+"f": "p081.webm",
+"n": "点击回应-挠痒咯咯笑.webm",
+"t": "click"
+},
+{
+"f": "p082.webm",
+"n": "照镜子.webm",
+"t": "act"
+},
+{
+"f": "p083.webm",
+"n": "玩水枪.webm",
+"t": "act"
+},
+{
+"f": "p084.webm",
+"n": "玩游戏气急败坏.webm",
+"t": "act"
+},
+{
+"f": "p085.webm",
+"n": "用鲸鱼尾巴拍打地面.webm",
+"t": "act"
+},
+{
+"f": "p086.webm",
+"n": "睡觉-开始.webm",
+"t": "act"
+},
+{
+"f": "p087.webm",
+"n": "睡觉-循环.webm",
+"t": "act"
+},
+{
+"f": "p088.webm",
+"n": "睡觉-起来.webm",
+"t": "act"
+},
+{
+"f": "p089.webm",
+"n": "碎碎念-发呆碎碎念.webm",
+"t": "act"
+},
+{
+"f": "p090.webm",
+"n": "碎碎念-对屏碎碎念.webm",
+"t": "act"
+},
+{
+"f": "p091.webm",
+"n": "碎碎念-擦桌碎碎念.webm",
+"t": "act"
+},
+{
+"f": "p092.webm",
+"n": "穿针乞巧.webm",
+"t": "act"
+},
+{
+"f": "p093.webm",
+"n": "舞狮头.webm",
+"t": "act"
+},
+{
+"f": "p094.webm",
+"n": "荡秋千.webm",
+"t": "act"
+},
+{
+"f": "p095.webm",
+"n": "萌化小幽灵.webm",
+"t": "act"
+},
+{
+"f": "p096.webm",
+"n": "蓝鲸现世.webm",
+"t": "act"
+},
+{
+"f": "p097.webm",
+"n": "蝴蝶蜜蜂环绕头顶开花.webm",
+"t": "act"
+},
+{
+"f": "p098.webm",
+"n": "螃蟹走路.webm",
+"t": "act"
+},
+{
+"f": "p099.webm",
+"n": "被吓一跳.webm",
+"t": "act"
+},
+{
+"f": "p100.webm",
+"n": "被落叶淹没.webm",
+"t": "act"
+},
+{
+"f": "p101.webm",
+"n": "被鼠标拖拽悬空反馈.webm",
+"t": "drag"
+},
+{
+"f": "p102.webm",
+"n": "装点圣诞树.webm",
+"t": "act"
+},
+{
+"f": "p103.webm",
+"n": "讨糖南瓜灯.webm",
+"t": "act"
+},
+{
+"f": "p104.webm",
+"n": "超大伸懒腰.webm",
+"t": "act"
+},
+{
+"f": "p105.webm",
+"n": "踢毽子.webm",
+"t": "act"
+},
+{
+"f": "p106.webm",
+"n": "轻快摇摆舞.webm",
+"t": "act"
+},
+{
+"f": "p107.webm",
+"n": "轻快记录.webm",
+"t": "act"
+},
+{
+"f": "p108.webm",
+"n": "骑木马.webm",
+"t": "act"
+},
+{
+"f": "p109.webm",
+"n": "鲸鱼吐泡泡特效.webm",
+"t": "act"
+}
+]
+}
