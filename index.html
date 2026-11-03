@@ -45,7 +45,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#000;color:#
 #empty svg{opacity:.45}
 
 /* ========== 时钟 ========== */
-#clock{position:absolute;left:50%;top:12%;transform:translate(-50%,-50%);
+#clock{position:absolute;left:50%;top:12%;transform:translate(-50%,-50%) translate(var(--sx,0px),var(--sy,0px));transition:transform 3s ease-in-out,background .25s,opacity .25s;
   text-align:center;padding:10px 18px;border-radius:16px;cursor:grab;z-index:30;
   color:var(--cc);opacity:var(--co);text-shadow:0 2px 18px rgba(0,0,0,.55);
   transition:background .25s,opacity .25s;touch-action:none}
@@ -53,6 +53,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#000;color:#
   box-shadow:0 6px 30px rgba(0,0,0,.25)}
 #clock.dragging{cursor:grabbing;background:rgba(0,0,0,.4);outline:1px dashed rgba(255,255,255,.5)}
 #clock.hide{display:none}
+#dim{position:absolute;inset:0;background:#000;opacity:0;transition:opacity 2.5s;pointer-events:none;z-index:36}
 .c-time{font-size:var(--cs);line-height:1.02;font-weight:300;letter-spacing:.01em;
   font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
 .c-time.small{font-size:calc(var(--cs) * .42);font-weight:400}
@@ -159,6 +160,7 @@ select option{background:#1c1c22}
     <div><b>还没有图片</b></div>
     <div>点下面的 ＋ 导入，或把图片拖进来</div>
   </div>
+  <div id="dim"></div>
   <div id="clock" class="glass hide"></div>
   <div id="info"></div>
 </div>
@@ -228,6 +230,14 @@ select option{background:#1c1c22}
       <div class="row"><div class="lab">自定义一行</div><input type="text" id="cCustom" maxlength="24" placeholder="留空则不显示"></div>
       <div class="row"><div class="lab" style="color:#9a9aa4;font-size:12px">拖动画面上的时钟可改位置，双击时钟回到顶部居中</div></div>
 
+      <div class="sec-t">护屏与夜间</div>
+      <div class="row"><div><div class="lab">防烧屏微移</div><div class="hint">时钟每 90 秒挪几像素，防 OLED 残影</div></div><button class="sw" id="sBurn"></button></div>
+      <div class="row"><div><div class="lab">夜间压暗</div><div class="hint">到点自动把画面压暗</div></div><button class="sw" id="sNight"></button></div>
+      <div class="row"><div class="lab">时间段</div><div style="display:flex;align-items:center;gap:8px">
+        <input type="time" id="nStart" style="width:104px"><span style="color:#8b8b95">—</span><input type="time" id="nEnd" style="width:104px"></div></div>
+      <div class="row"><div class="lab">压暗程度</div><div style="display:flex;align-items:center;gap:9px">
+        <input type="range" id="nLevel" min="10" max="95" step="5"><span id="vLevel" style="font-size:13px;color:#9a9aa4;width:38px;text-align:right"></span></div></div>
+
       <div class="sec-t">其他</div>
       <div class="row"><div><div class="lab">屏幕方向</div><div class="hint">浏览器允许时生效，失败请用手机系统的自动旋转开关</div></div><div class="seg" id="segOrient"></div></div>
       <div class="row"><div class="lab">屏幕常亮</div><div class="hint" style="text-align:right">浏览器支持时生效</div><button class="sw" id="sWake"></button></div>
@@ -250,7 +260,7 @@ select option{background:#1c1c22}
 
 <script>
 "use strict";
-const VER = '2026-11-03.6';
+const VER = '2026-11-03.7';
 /* ============================================================
    图帧 —— 全屏图片 + 可自定义时钟
    ============================================================ */
@@ -260,7 +270,8 @@ const $$ = s => Array.from(document.querySelectorAll(s));
 /* ---------- 默认设置 ---------- */
 const DEF = {
   playing: true, interval: 8, trans: 'fade', sort: 'add', fit: 'contain',
-  fill: 'blur', zoom: 0, perPage: '1', mirror: false, blur: true, kb: true, info: true, wake: true, orient: 'auto',
+  fill: 'blur', zoom: 0, perPage: '1', mirror: false,
+  burn: true, night: { on: false, start: '23:00', end: '07:00', level: 70 }, blur: true, kb: true, info: true, wake: true, orient: 'auto',
   clock: {
     show: true, x: 50, y: 12, size: 64, color: '#ffffff', opacity: .92, glass: true,
     h24: true, sec: true, date: true, week: true, lunar: true, jq: true,
@@ -822,6 +833,7 @@ function tick(){
     el.innerHTML = html;
   }
   applyClockStyle();
+  nightTick();
 }
 
 function esc(s){
@@ -1182,6 +1194,12 @@ function syncUI(){
   $('#sKB').classList.toggle('on', cfg.kb);
   $('#sInfo').classList.toggle('on', cfg.info);
   $('#sWake').classList.toggle('on', cfg.wake);
+  $('#sBurn').classList.toggle('on', cfg.burn);
+  $('#sNight').classList.toggle('on', cfg.night.on);
+  $('#nStart').value = cfg.night.start;
+  $('#nEnd').value = cfg.night.end;
+  $('#nLevel').value = cfg.night.level;
+  $('#vLevel').textContent = cfg.night.level + '%';
   const ob = $('#segOrient');
   if (ob && ob.children.length) Array.from(ob.children).forEach(b => b.classList.toggle('on', b.dataset.v === cfg.orient));
   $('#cShow').classList.toggle('on', c.show);
@@ -1221,6 +1239,11 @@ $('#sInt').addEventListener('input', e => {
 });
 bindSw('#sPlay', () => cfg.playing, v => { cfg.playing = v; schedule(); });
 bindSw('#sKB', () => cfg.kb, v => { cfg.kb = v; showPhoto(state.idx, false); });
+bindSw('#sBurn', () => cfg.burn, v => { cfg.burn = v; if (v) burnShift(); else { $('#clock').style.setProperty('--sx','0px'); $('#clock').style.setProperty('--sy','0px'); } });
+bindSw('#sNight', () => cfg.night.on, v => { cfg.night.on = v; nightTick(); });
+$('#nStart').addEventListener('change', e => { cfg.night.start = e.target.value; saveCfg(); nightTick(); });
+$('#nEnd').addEventListener('change', e => { cfg.night.end = e.target.value; saveCfg(); nightTick(); });
+$('#nLevel').addEventListener('input', e => { cfg.night.level = +e.target.value; $('#vLevel').textContent = cfg.night.level + '%'; saveCfg(); nightTick(); });
 bindSw('#sMirror', () => cfg.mirror, v => { cfg.mirror = v; showPhoto(state.idx, false); });
 bindSw('#sInfo', () => cfg.info, v => { cfg.info = v; updateInfo(currentPage()); });
 bindSw('#sWake', () => cfg.wake, v => { cfg.wake = v; if (v) keepAwake(); });
@@ -1331,6 +1354,38 @@ function dataURLtoBlob(d){
   const u8 = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
   return new Blob([u8], { type: mime });
+}
+
+/* ============================================================
+   防烧屏微移
+   ============================================================ */
+function burnShift(){
+  const el = $('#clock');
+  if (!cfg.burn || !el){ return; }
+  const a = (Math.random() * 2 - 1) * 5;
+  const b = (Math.random() * 2 - 1) * 5;
+  el.style.setProperty('--sx', a.toFixed(1) + 'px');
+  el.style.setProperty('--sy', b.toFixed(1) + 'px');
+}
+setInterval(() => { if (cfg.burn && !document.hidden) burnShift(); }, 90000);
+
+/* ============================================================
+   夜间压暗
+   ============================================================ */
+function toMin(t){
+  const m = /^(\d{1,2}):(\d{2})$/.exec(t || '');
+  return m ? (+m[1]) * 60 + (+m[2]) : -1;
+}
+function nightTick(){
+  const el = $('#dim');
+  if (!el) return;
+  if (!cfg.night || !cfg.night.on){ el.style.opacity = 0; return; }
+  const d = new Date();
+  const now = d.getHours() * 60 + d.getMinutes();
+  const s = toMin(cfg.night.start), e = toMin(cfg.night.end);
+  if (s < 0 || e < 0 || s === e){ el.style.opacity = 0; return; }
+  const on = s < e ? (now >= s && now < e) : (now >= s || now < e);
+  el.style.opacity = on ? (cfg.night.level / 100) : 0;
 }
 
 /* ============================================================
