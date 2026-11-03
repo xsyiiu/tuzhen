@@ -202,6 +202,7 @@ select option{background:#1c1c22}
       <div class="row"><div class="lab">排序</div><div class="seg" id="segSort"></div></div>
       <div class="row"><div><div class="lab">每屏张数</div><div class="hint">自动＝竖图单张、横图最多叠 3 张</div></div><div class="seg" id="segPer"></div></div>
       <div class="row"><div class="lab">填充方式</div><div class="seg" id="segFit"></div></div>
+      <div class="row"><div><div class="lab">镜像翻转</div><div class="hint">仅「重复」模式：相邻两张上下翻转拼接，接缝不留硬边</div></div><button class="sw" id="sMirror"></button></div>
       <div class="row"><div><div class="lab">空白填充</div><div class="hint">图片没铺满屏幕时，空出来的部分放什么</div></div><div class="seg" id="segFill"></div></div>
       <div class="row"><div><div class="lab">缩放微调</div><div class="hint">往右把图放大，100 等于铺满</div></div><div style="display:flex;align-items:center;gap:9px"><input type="range" id="sZoom" min="0" max="100" step="1"><span id="vZoom" style="font-size:13px;color:#9a9aa4;width:38px;text-align:right"></span></div></div>
       <div class="row"><div class="lab">缓慢推拉（Ken Burns）</div><button class="sw" id="sKB"></button></div>
@@ -254,7 +255,7 @@ const $$ = s => Array.from(document.querySelectorAll(s));
 /* ---------- 默认设置 ---------- */
 const DEF = {
   playing: true, interval: 8, trans: 'fade', sort: 'add', fit: 'contain',
-  fill: 'blur', zoom: 0, perPage: '1', blur: true, kb: true, info: true, wake: true, orient: 'auto',
+  fill: 'blur', zoom: 0, perPage: '1', mirror: false, blur: true, kb: true, info: true, wake: true, orient: 'auto',
   clock: {
     show: true, x: 50, y: 12, size: 64, color: '#ffffff', opacity: .92, glass: true,
     h24: true, sec: true, date: true, week: true, lunar: true, jq: true,
@@ -540,12 +541,31 @@ function currentPage(){
 }
 
 /* 按图片真实比例竖排，剩余空间上下平分 */
-function layoutPage(el, page, useCover){
+function layoutPage(el, page, useCover, isRepeat){
   el.textContent = '';
   if (!page || !page.length) return;
   el.classList.remove('cover');
   const W = el.clientWidth || innerWidth;
   const H = el.clientHeight || innerHeight;
+  if (isRepeat){
+    // 同一张图按原比例上下重复，直到铺满
+    const p = page[0];
+    const ra = (p.w && p.h) ? p.w / p.h : 1.78;
+    const h = W / Math.max(0.05, ra);
+    const cnt = Math.max(1, Math.ceil(H / h - 0.001));
+    let y = (H - cnt * h) / 2;
+    for (let i = 0; i < cnt; i++){
+      const im = document.createElement('img');
+      im.className = 'pageImg';
+      im.src = p.url;
+      const flip = cfg.mirror && (i % 2 === 1);
+      im.style.cssText = 'top:' + y.toFixed(2) + 'px;left:0;width:' + W + 'px;height:' +
+                         h.toFixed(2) + 'px;' + (flip ? 'transform:scaleY(-1);' : '');
+      el.appendChild(im);
+      y += h;
+    }
+    return;
+  }
   if (useCover){
     const im = document.createElement('img');
     im.className = 'pageImg';
@@ -604,10 +624,11 @@ function showPhoto(i, animate){
     const ra = p0.w / p0.h, rs = innerWidth / innerHeight;
     useCover = Math.abs(ra / rs - 1) < 0.12;
   }
+  const isRepeat = cfg.fit === 'repeat';
   state.curCover = useCover;
-  applyBg(page, useCover);
+  applyBg(page, useCover || isRepeat);
 
-  layoutPage(newEl, page, useCover);
+  layoutPage(newEl, page, useCover, isRepeat);
   newEl.classList.toggle('noKB', !cfg.kb);
 
   const fin = () => {
@@ -998,7 +1019,7 @@ function renderGridCurrent(){
    ============================================================ */
 const TRANS = [['fade','淡入淡出'],['slide','左右滑动'],['zoom','缩放'],['black','黑场'],['random','随机']];
 const SORTS = [['add','添加顺序'],['name','按名称'],['random','随机']];
-const FITS  = [['contain','完整'],['auto','智能'],['cover','铺满']];
+const FITS  = [['contain','完整'],['auto','智能'],['cover','铺满'],['repeat','重复']];
 const FILLS = [['blur','模糊'],['edge','边缘延展'],['none','纯黑']];
 const PERS  = [['1','1 张'],['2','2 张'],['3','3 张'],['auto','自动']];
 const ORIENTS = [['auto','跟随系统'],['portrait','锁竖屏'],['landscape','锁横屏']];
@@ -1152,6 +1173,7 @@ $('#sInt').addEventListener('input', e => {
 });
 bindSw('#sPlay', () => cfg.playing, v => { cfg.playing = v; schedule(); });
 bindSw('#sKB', () => cfg.kb, v => { cfg.kb = v; showPhoto(state.idx, false); });
+bindSw('#sMirror', () => cfg.mirror, v => { cfg.mirror = v; showPhoto(state.idx, false); });
 bindSw('#sInfo', () => cfg.info, v => { cfg.info = v; updateInfo(currentPage()); });
 bindSw('#sWake', () => cfg.wake, v => { cfg.wake = v; if (v) keepAwake(); });
 
@@ -1305,7 +1327,7 @@ async function keepAwake(){
 window.addEventListener('resize', () => {
   if (!state.photos.length) return;
   const page = currentPage();
-  layoutPage(layerEl[state.active], page, state.curCover);
+  layoutPage(layerEl[state.active], page, state.curCover, cfg.fit === 'repeat');
   applyView();
   applyBg(page, state.curCover);
 });
