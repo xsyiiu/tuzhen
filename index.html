@@ -201,7 +201,7 @@ select option{background:#1c1c22}
       <div class="row"><div class="lab">切换效果</div><div class="seg" id="segTrans"></div></div>
       <div class="row"><div class="lab">排序</div><div class="seg" id="segSort"></div></div>
       <div class="row"><div><div class="lab">每屏张数</div><div class="hint">自动＝竖图单张、横图最多叠 3 张</div></div><div class="seg" id="segPer"></div></div>
-      <div class="row"><div class="lab">填充方式</div><div class="seg" id="segFit"></div></div>
+      <div class="row"><div><div class="lab">填充方式</div><div class="hint">智能＝横图重复铺满、竖图完整显示</div></div><div class="seg" id="segFit"></div></div>
       <div class="row"><div><div class="lab">镜像翻转</div><div class="hint">仅「重复」模式：相邻两张上下翻转拼接，接缝不留硬边</div></div><button class="sw" id="sMirror"></button></div>
       <div class="row"><div><div class="lab">空白填充</div><div class="hint">图片没铺满屏幕时，空出来的部分放什么</div></div><div class="seg" id="segFill"></div></div>
       <div class="row"><div><div class="lab">缩放微调</div><div class="hint">往右把图放大，100 等于铺满</div></div><div style="display:flex;align-items:center;gap:9px"><input type="range" id="sZoom" min="0" max="100" step="1"><span id="vZoom" style="font-size:13px;color:#9a9aa4;width:38px;text-align:right"></span></div></div>
@@ -248,7 +248,7 @@ select option{background:#1c1c22}
 
 <script>
 "use strict";
-const VER = '2026-11-03.2';
+const VER = '2026-11-03.3';
 /* ============================================================
    图帧 —— 全屏图片 + 可自定义时钟
    ============================================================ */
@@ -517,6 +517,12 @@ function applyBg(page, useCover){
 function currentPage(){
   const n = state.photos.length;
   let count = 1;
+  // 智能模式：横图靠重复铺满，一屏只放一张
+  if (cfg.fit === 'auto'){
+    const q = state.photos[state.idx];
+    const rq = (q.w && q.h) ? q.w / q.h : 1.78;
+    if (rq >= 1.02) return [q];
+  }
   if (cfg.perPage === 'auto' && n > 1){
     const W = innerWidth, H = innerHeight;
     const asc = i => {
@@ -623,13 +629,18 @@ function showPhoto(i, animate){
   const nk = state.active === 'A' ? 'B' : 'A';
   const newEl = layerEl[nk];
 
-  // 填充方式：完整 / 智能 / 铺满
+  // 填充方式：完整 / 智能 / 铺满 / 重复
   let useCover = cfg.fit === 'cover';
-  if (cfg.fit === 'auto' && p0.w && p0.h && page.length === 1){
+  let isRepeat = cfg.fit === 'repeat';
+  if (cfg.fit === 'auto' && p0.w && p0.h){
     const ra = p0.w / p0.h, rs = innerWidth / innerHeight;
-    useCover = Math.abs(ra / rs - 1) < 0.12;
+    if (ra >= 1.02){
+      isRepeat = true;                       // 横图 → 重复铺满
+    } else if (Math.abs(ra / rs - 1) < 0.12){
+      useCover = true;                       // 比例接近 → 直接铺满
+    }
   }
-  const isRepeat = cfg.fit === 'repeat';
+  if (isRepeat) useCover = false;
   state.curCover = useCover;
   applyBg(page, useCover || isRepeat);
 
