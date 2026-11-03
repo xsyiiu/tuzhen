@@ -51,6 +51,8 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#000;color:#
   transition:background .25s,opacity .25s;touch-action:none}
 #clock.glass{background:rgba(0,0,0,.28);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
   box-shadow:0 6px 30px rgba(0,0,0,.25)}
+#clock.ink{text-shadow:0 1px 0 rgba(255,255,255,.9),0 0 20px rgba(255,255,255,.8),0 0 6px rgba(255,255,255,.6)}
+#clock.ink.glass{background:rgba(255,255,255,.30)}
 #clock.dragging{cursor:grabbing;background:rgba(0,0,0,.4);outline:1px dashed rgba(255,255,255,.5)}
 #clock.hide{display:none}
 #dim{position:absolute;inset:0;background:#000;opacity:0;transition:opacity 2.5s;pointer-events:none;z-index:36}
@@ -214,7 +216,8 @@ select option{background:#1c1c22}
       <div class="row"><div class="lab">显示时钟</div><button class="sw" id="cShow"></button></div>
       <div class="row"><div class="lab">字号</div><div style="display:flex;align-items:center;gap:9px">
         <input type="range" id="cSize" min="20" max="180" step="1"><span id="vSize" style="font-size:13px;color:#9a9aa4;width:36px;text-align:right"></span></div></div>
-      <div class="row"><div class="lab">颜色</div><div id="swatches" style="display:flex;gap:9px"></div></div>
+      <div class="row"><div><div class="lab">自动配色</div><div class="hint">按图片明暗自动在浅字/深字之间切换</div></div><button class="sw" id="cAuto"></button></div>
+      <div class="row"><div class="lab">浅色时用</div><div id="swatches" style="display:flex;gap:9px"></div></div>
       <div class="row"><div class="lab">不透明度</div><div style="display:flex;align-items:center;gap:9px">
         <input type="range" id="cOp" min="20" max="100" step="1"><span id="vOp" style="font-size:13px;color:#9a9aa4;width:36px;text-align:right"></span></div></div>
       <div class="row"><div class="lab">毛玻璃底板</div><button class="sw" id="cGlass"></button></div>
@@ -260,7 +263,7 @@ select option{background:#1c1c22}
 
 <script>
 "use strict";
-const VER = '2026-11-03.8';
+const VER = '2026-11-03.9';
 /* ============================================================
    图帧 —— 全屏图片 + 可自定义时钟
    ============================================================ */
@@ -273,7 +276,7 @@ const DEF = {
   fill: 'blur', zoom: 0, perPage: '1', mirror: false,
   burn: true, night: { on: false, start: '23:00', end: '07:00', level: 70 }, blur: true, kb: true, info: true, wake: true, orient: 'auto',
   clock: {
-    show: true, x: 50, y: 12, size: 64, color: '#ffffff', opacity: .92, glass: true,
+    show: true, x: 50, y: 12, size: 64, color: '#ffffff', opacity: .92, glass: true, autoColor: true,
     h24: true, sec: true, date: true, week: true, lunar: true, jq: true,
     cdName: '考研', cdDate: '2026-12-19', custom: ''
   }
@@ -718,6 +721,7 @@ function showPhoto(i, animate, dir){
   if (isRepeat) useCover = false;
   state.curRepeat = isRepeat;
   state.curCover = useCover;
+  state.curBright = (p0.focus && typeof p0.focus.bright === 'number') ? p0.focus.bright : 0.5;
   applyBg(page, useCover || isRepeat);
 
   layoutPage(newEl, page, useCover, isRepeat);
@@ -728,6 +732,7 @@ function showPhoto(i, animate, dir){
     analyzeImage(p0.url, res => {
       if (!res) return;
       p0.focus = res;
+      if (state.photos[state.idx] === p0){ state.curBright = res.bright; applyClockStyle(); }
       setTimeout(() => {
         if (state.photos[state.idx] === p0 && layerEl[state.active]){
           layoutPage(layerEl[state.active], currentPage(), state.curCover, state.curRepeat);
@@ -913,10 +918,13 @@ function applyClockStyle(){
   const el = $('#clock');
   el.style.left = c.x + '%';
   el.style.top = c.y + '%';
+  const br = (typeof state.curBright === 'number') ? state.curBright : 0.5;
+  const ink = !!c.autoColor && br > 0.62;
   el.style.setProperty('--cs', c.size + 'px');
-  el.style.setProperty('--cc', c.color);
-  el.style.setProperty('--co', c.opacity);
+  el.style.setProperty('--cc', ink ? '#14141a' : c.color);
+  el.style.setProperty('--co', ink ? Math.max(c.opacity, .95) : c.opacity);
   el.classList.toggle('glass', !!c.glass);
+  el.classList.toggle('ink', ink);
 }
 
 /* 拖动时钟 */
@@ -1273,6 +1281,7 @@ function syncUI(){
   if (ob && ob.children.length) Array.from(ob.children).forEach(b => b.classList.toggle('on', b.dataset.v === cfg.orient));
   $('#cShow').classList.toggle('on', c.show);
   $('#cGlass').classList.toggle('on', c.glass);
+  $('#cAuto').classList.toggle('on', c.autoColor);
   $('#c24').classList.toggle('on', c.h24);
   $('#cSec').classList.toggle('on', c.sec);
   $('#cDate').classList.toggle('on', c.date);
@@ -1318,6 +1327,7 @@ bindSw('#sInfo', () => cfg.info, v => { cfg.info = v; updateInfo(currentPage());
 bindSw('#sWake', () => cfg.wake, v => { cfg.wake = v; if (v) keepAwake(); });
 
 bindSw('#cShow',  () => cfg.clock.show,  v => { cfg.clock.show = v; tick(); });
+bindSw('#cAuto', () => cfg.clock.autoColor, v => { cfg.clock.autoColor = v; applyClockStyle(); });
 bindSw('#cGlass', () => cfg.clock.glass, v => { cfg.clock.glass = v; applyClockStyle(); });
 bindSw('#c24',    () => cfg.clock.h24,   v => { cfg.clock.h24 = v; tick(); });
 bindSw('#cSec',   () => cfg.clock.sec,   v => { cfg.clock.sec = v; tick(); });
