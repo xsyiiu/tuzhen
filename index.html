@@ -250,7 +250,7 @@ select option{background:#1c1c22}
 
 <script>
 "use strict";
-const VER = '2026-11-03.5';
+const VER = '2026-11-03.6';
 /* ============================================================
    图帧 —— 全屏图片 + 可自定义时钟
    ============================================================ */
@@ -614,7 +614,8 @@ function layoutPage(el, page, useCover, isRepeat){
   });
 }
 
-function showPhoto(i, animate){
+function showPhoto(i, animate, dir){
+  state.dir = (dir === undefined ? 1 : (dir >= 0 ? 1 : -1));
   const n = state.photos.length;
   const empty = $('#empty');
   if (!n){
@@ -673,13 +674,13 @@ function showPhoto(i, animate){
     const kind = cfg.trans === 'random'
       ? ['fade','slide','zoom','black'][Math.floor(Math.random() * 4)]
       : cfg.trans;
-    playTrans(kind, curEl, newEl, fin);
+    playTrans(kind, curEl, newEl, fin, state.dir);
   }
   updateInfo(page);
   renderGridCurrent();
 }
 
-function playTrans(kind, curEl, newEl, done){
+function playTrans(kind, curEl, newEl, done, dir){
   const D = 780;
   const base = { duration: D, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'both' };
   let a1 = null, a2 = null;
@@ -687,8 +688,9 @@ function playTrans(kind, curEl, newEl, done){
   newEl.style.opacity = '1';
 
   if (kind === 'slide'){
-    a1 = newEl.animate([{ transform: 'translateX(100%)' }, { transform: 'translateX(0)' }], base);
-    a2 = curEl.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-100%)' }], base);
+    const k = (dir >= 0 ? 1 : -1);
+    a1 = newEl.animate([{ transform: 'translateX(' + (100 * k) + '%)' }, { transform: 'translateX(0)' }], base);
+    a2 = curEl.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(' + (-100 * k) + '%)' }], base);
   } else if (kind === 'zoom'){
     newEl.style.opacity = '0';
     a1 = newEl.animate([
@@ -713,7 +715,7 @@ function playTrans(kind, curEl, newEl, done){
 function nextPhoto(d){
   if (!state.photos.length) return;
   resetView();
-  showPhoto(state.idx + d * (state.pageLen || 1), true);
+  showPhoto(state.idx + d * (state.pageLen || 1), true, d);
 }
 
 function updateInfo(page){
@@ -1035,7 +1037,7 @@ function renderGrid(){
     d.addEventListener('click', ev => { ev.stopPropagation(); delPhoto(p.id); });
     c.appendChild(im); c.appendChild(d);
     c.addEventListener('click', () => {
-      resetView(); showPhoto(i, true); schedule(); closePanel(); showBar();
+      resetView(); showPhoto(i, true, i >= state.idx ? 1 : -1); schedule(); closePanel(); showBar();
     });
     g.appendChild(c);
   });
