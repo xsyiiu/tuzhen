@@ -1,5 +1,5 @@
 /* 图帧 离线缓存：应用外壳优先走缓存，装到桌面后断网也能打开 */
-const CACHE = 'tuzhen-v1';
+const CACHE = 'tuzhen-v2';
 const SHELL = ['./', './index.html', './manifest.json', './icon.svg', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -21,6 +21,17 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
+  // 页面本身走网络优先，保证改完文件刷新就是新版
+  if (req.mode === 'navigate') {
+    e.respondWith(
+      fetch(req).then(res => {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
+        return res;
+      }).catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
   e.respondWith(
     caches.match(req).then(hit => {
       if (hit) return hit;
