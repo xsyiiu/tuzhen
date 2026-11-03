@@ -232,7 +232,9 @@ select option{background:#1c1c22}
       <div class="row"><div class="lab">屏幕常亮</div><div class="hint" style="text-align:right">浏览器支持时生效</div><button class="sw" id="sWake"></button></div>
       <div class="row"><div class="lab">显示图片信息</div><button class="sw" id="sInfo"></button></div>
       <div class="row"><div class="lab danger">清空全部图片</div><button class="btn wide danger" id="bClear" style="background:rgba(255,80,80,.14)">清空</button></div>
-      <div style="color:#5d5d68;font-size:11px;line-height:1.8;margin-top:24px">
+      <div id="verLine" style="color:#8e8e9a;font-size:12px;margin-top:26px;padding-top:14px;
+        border-top:1px solid rgba(255,255,255,.08);letter-spacing:.04em">版本 —</div>
+      <div style="color:#5d5d68;font-size:11px;line-height:1.8;margin-top:8px">
         存储方式：<span id="storeMode">检测中</span><br>
         本版本为单文件网页应用，数据只存在本机浏览器里，不上传。
       </div>
@@ -246,6 +248,7 @@ select option{background:#1c1c22}
 
 <script>
 "use strict";
+const VER = '2026-11-03.2';
 /* ============================================================
    图帧 —— 全屏图片 + 可自定义时钟
    ============================================================ */
@@ -418,6 +421,8 @@ async function loadPhotos(){
       id: r.id, name: r.name, w: r.w, h: (r.hh || r.h || 0), added: r.added, url: r.data
     }));
   }
+  const vl = $('#verLine');
+  if (vl) vl.textContent = '版本 v' + VER + '　构建 2026年11月3日';
   $('#storeMode').textContent = state.storeMode === 'idb'
     ? '浏览器数据库（IndexedDB），可长期保存'
     : '本地存储（localStorage）— 空间有限，约 10 张，且部分环境重开会清空';
