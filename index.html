@@ -55,6 +55,11 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#000;color:#
 #clock.ink.glass{background:rgba(255,255,255,.30)}
 #clock.dragging{cursor:grabbing;background:rgba(0,0,0,.4);outline:1px dashed rgba(255,255,255,.5)}
 #clock.hide{display:none}
+#pet{position:absolute;right:14px;bottom:calc(86px + var(--safe-b));width:150px;z-index:28;
+  display:none;pointer-events:none;cursor:grab;touch-action:none;background:transparent;
+  filter:drop-shadow(0 8px 18px rgba(0,0,0,.45))}
+#pet.on{display:block;pointer-events:auto}
+#pet.dragging{cursor:grabbing;transform:scale(1.04)}
 #dim{position:absolute;inset:0;background:#000;opacity:0;transition:opacity 2.5s;pointer-events:none;z-index:36}
 .c-time{font-size:var(--cs);line-height:1.02;font-weight:300;letter-spacing:.01em;
   font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
@@ -163,6 +168,7 @@ select option{background:#1c1c22}
     <div>点下面的 ＋ 导入，或把图片拖进来</div>
   </div>
   <div id="dim"></div>
+  <video id="pet" muted playsinline preload="auto" disablepictureinpicture></video>
   <div id="clock" class="glass hide"></div>
   <div id="info"></div>
 </div>
@@ -241,6 +247,11 @@ select option{background:#1c1c22}
       <div class="row"><div class="lab">压暗程度</div><div style="display:flex;align-items:center;gap:9px">
         <input type="range" id="nLevel" min="10" max="95" step="5"><span id="vLevel" style="font-size:13px;color:#9a9aa4;width:38px;text-align:right"></span></div></div>
 
+      <div class="sec-t">桌面宠物</div>
+      <div class="row"><div><div class="lab">显示宠物</div><div class="hint">素材 © PC2005-cloud/dsh-pet，禁止商用</div></div><button class="sw" id="pOn"></button></div>
+      <div class="row"><div class="lab">大小</div><div style="display:flex;align-items:center;gap:9px">
+        <input type="range" id="pSize" min="80" max="260" step="10"><span id="vSize2" style="font-size:13px;color:#9a9aa4;width:42px;text-align:right"></span></div></div>
+
       <div class="sec-t">其他</div>
       <div class="row"><div><div class="lab">屏幕方向</div><div class="hint">浏览器允许时生效，失败请用手机系统的自动旋转开关</div></div><div class="seg" id="segOrient"></div></div>
       <div class="row"><div class="lab">屏幕常亮</div><div class="hint" style="text-align:right">浏览器支持时生效</div><button class="sw" id="sWake"></button></div>
@@ -263,7 +274,7 @@ select option{background:#1c1c22}
 
 <script>
 "use strict";
-const VER = '2026-11-03.9';
+const VER = '2026-11-03.10';
 /* ============================================================
    图帧 —— 全屏图片 + 可自定义时钟
    ============================================================ */
@@ -274,6 +285,7 @@ const $$ = s => Array.from(document.querySelectorAll(s));
 const DEF = {
   playing: true, interval: 8, trans: 'fade', sort: 'add', fit: 'contain',
   fill: 'blur', zoom: 0, perPage: '1', mirror: false,
+  pet: { on: false, size: 150, x: null, y: null },
   burn: true, night: { on: false, start: '23:00', end: '07:00', level: 70 }, blur: true, kb: true, info: true, wake: true, orient: 'auto',
   clock: {
     show: true, x: 50, y: 12, size: 64, color: '#ffffff', opacity: .92, glass: true, autoColor: true,
@@ -1272,6 +1284,9 @@ function syncUI(){
   $('#sInfo').classList.toggle('on', cfg.info);
   $('#sWake').classList.toggle('on', cfg.wake);
   $('#sBurn').classList.toggle('on', cfg.burn);
+  $('#pOn').classList.toggle('on', cfg.pet.on);
+  $('#pSize').value = cfg.pet.size;
+  $('#vSize2').textContent = cfg.pet.size + 'px';
   $('#sNight').classList.toggle('on', cfg.night.on);
   $('#nStart').value = cfg.night.start;
   $('#nEnd').value = cfg.night.end;
@@ -1317,6 +1332,13 @@ $('#sInt').addEventListener('input', e => {
 });
 bindSw('#sPlay', () => cfg.playing, v => { cfg.playing = v; schedule(); });
 bindSw('#sKB', () => cfg.kb, v => { cfg.kb = v; showPhoto(state.idx, false); });
+bindSw('#pOn', () => cfg.pet.on, v => { cfg.pet.on = v; petSync(); });
+$('#pSize').addEventListener('input', e => {
+  cfg.pet.size = +e.target.value;
+  $('#vSize2').textContent = cfg.pet.size + 'px';
+  if (cfg.pet.on) $('#pet').style.width = cfg.pet.size + 'px';
+  saveCfg();
+});
 bindSw('#sBurn', () => cfg.burn, v => { cfg.burn = v; if (v) burnShift(); else { $('#clock').style.setProperty('--sx','0px'); $('#clock').style.setProperty('--sy','0px'); } });
 bindSw('#sNight', () => cfg.night.on, v => { cfg.night.on = v; nightTick(); });
 $('#nStart').addEventListener('change', e => { cfg.night.start = e.target.value; saveCfg(); nightTick(); });
@@ -1436,6 +1458,90 @@ function dataURLtoBlob(d){
 }
 
 /* ============================================================
+   桌面宠物（素材来自 PC2005-cloud/dsh-pet，禁止商用）
+   ============================================================ */
+const PET_FILES = {
+  idle: 'pet/idle.webm',
+  acts: ['pet/act1.webm', 'pet/act2.webm', 'pet/act3.webm'],
+  clicks: ['pet/click1.webm', 'pet/click2.webm']
+};
+let petToken = 0;
+
+function petPlay(src, onEnd){
+  const v = $('#pet');
+  const my = ++petToken;
+  try { v.src = src; } catch(e){}
+  const done = () => {
+    v.removeEventListener('ended', done);
+    if (my === petToken && onEnd) onEnd();
+  };
+  v.addEventListener('ended', done);
+  const pr = v.play();
+  if (pr && pr.catch) pr.catch(() => {});
+}
+function petCycle(){
+  if (!cfg.pet.on) return;
+  const src = Math.random() < 0.45 ? PET_FILES.idle
+    : PET_FILES.acts[Math.floor(Math.random() * PET_FILES.acts.length)];
+  petPlay(src, () => {
+    const wait = 2000 + Math.random() * 5000;
+    setTimeout(() => { if (cfg.pet.on) petCycle(); }, wait);
+  });
+}
+function petSync(){
+  const v = $('#pet');
+  const on = !!(cfg.pet && cfg.pet.on);
+  v.classList.toggle('on', on);
+  if (!on){ v.pause(); petToken++; return; }
+  v.style.width = cfg.pet.size + 'px';
+  if (cfg.pet.x != null && cfg.pet.y != null){
+    v.style.right = 'auto'; v.style.bottom = 'auto';
+    v.style.left = cfg.pet.x + 'px';
+    v.style.top = cfg.pet.y + 'px';
+  } else {
+    v.style.left = ''; v.style.top = '';
+    v.style.right = '14px'; v.style.bottom = 'calc(86px + var(--safe-b))';
+  }
+  petCycle();
+}
+(function(){
+  const v = $('#pet');
+  let dragging = false, moved = false, sx = 0, sy = 0, ox = 0, oy = 0;
+  v.addEventListener('pointerdown', e => {
+    if (!cfg.pet.on) return;
+    dragging = true; moved = false;
+    v.setPointerCapture(e.pointerId);
+    const r = v.getBoundingClientRect();
+    ox = r.left; oy = r.top; sx = e.clientX; sy = e.clientY;
+    v.classList.add('dragging');
+    e.stopPropagation(); e.preventDefault();
+  });
+  v.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+    const nx = Math.max(0, Math.min(innerWidth - v.offsetWidth, ox + dx));
+    const ny = Math.max(0, Math.min(innerHeight - v.offsetHeight, oy + dy));
+    v.style.right = 'auto'; v.style.bottom = 'auto';
+    v.style.left = nx + 'px'; v.style.top = ny + 'px';
+    e.stopPropagation();
+  });
+  v.addEventListener('pointerup', e => {
+    if (!dragging) return;
+    dragging = false;
+    v.classList.remove('dragging');
+    if (moved){
+      const r = v.getBoundingClientRect();
+      cfg.pet.x = Math.round(r.left); cfg.pet.y = Math.round(r.top); saveCfg();
+    } else {
+      const src = PET_FILES.clicks[Math.floor(Math.random() * PET_FILES.clicks.length)];
+      petPlay(src, () => setTimeout(petCycle, 500));
+    }
+    e.stopPropagation();
+  });
+})();
+
+/* ============================================================
    防烧屏微移
    ============================================================ */
 function burnShift(){
@@ -1542,6 +1648,7 @@ document.addEventListener('keydown', e => {
   setInterval(tick, 1000);
   schedule();
   showBar();
+  petSync();
   keepAwake();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')){
     navigator.serviceWorker.register('sw.js').catch(() => {});
