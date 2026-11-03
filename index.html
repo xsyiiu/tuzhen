@@ -260,7 +260,7 @@ select option{background:#1c1c22}
 
 <script>
 "use strict";
-const VER = '2026-11-03.7';
+const VER = '2026-11-03.8';
 /* ============================================================
    图帧 —— 全屏图片 + 可自定义时钟
    ============================================================ */
@@ -471,6 +471,54 @@ function applySort(){
    ============================================================ */
 const layerEl = { A: $('#lyA'), B: $('#lyB') };
 
+/* 显著性分析：找画面焦点 + 平均亮度（纯 canvas，不联网） */
+const focusCache = new Map();
+function analyzeImage(url, cb){
+  if (focusCache.has(url)) { cb(focusCache.get(url)); return; }
+  const im = new Image();
+  im.onload = () => {
+    try {
+      const N = 48;
+      const c = document.createElement('canvas');
+      c.width = N; c.height = N;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      const sc = Math.max(N / im.naturalWidth, N / im.naturalHeight);
+      const w = im.naturalWidth * sc, h = im.naturalHeight * sc;
+      ctx.drawImage(im, (N - w) / 2, (N - h) / 2, w, h);
+      const d = ctx.getImageData(0, 0, N, N).data;
+      const g = new Float32Array(N * N);
+      let sr = 0, sg = 0, sb = 0;
+      for (let i = 0; i < N * N; i++){
+        const r = d[i * 4], gg = d[i * 4 + 1], b = d[i * 4 + 2];
+        g[i] = 0.299 * r + 0.587 * gg + 0.114 * b;
+        sr += r; sg += gg; sb += b;
+      }
+      const ar = sr / (N * N), ag = sg / (N * N), ab = sb / (N * N);
+      let wx = 0, wy = 0, wsum = 0, bright = 0;
+      for (let y = 0; y < N; y++){
+        for (let x = 0; x < N; x++){
+          const i = y * N + x;
+          const gx = (x < N - 1 ? g[i + 1] : g[i]) - (x > 0 ? g[i - 1] : g[i]);
+          const gy = (y < N - 1 ? g[i + N] : g[i]) - (y > 0 ? g[i - N] : g[i]);
+          const edge = Math.sqrt(gx * gx + gy * gy);
+          const cd = Math.sqrt(
+            Math.pow(d[i * 4] - ar, 2) + Math.pow(d[i * 4 + 1] - ag, 2) + Math.pow(d[i * 4 + 2] - ab, 2));
+          const sal = edge * 0.55 + cd * 0.45 + 0.5;   // +0.5 避免大片纯色区域权重归一化后过度放大
+          wx += x * sal; wy += y * sal; wsum += sal;
+          bright += g[i];
+        }
+      }
+      const fx = Math.min(1, Math.max(0, (wx / wsum) / (N - 1)));
+      const fy = Math.min(1, Math.max(0, (wy / wsum) / (N - 1)));
+      const res = { fx, fy, bright: bright / (N * N) / 255 };
+      focusCache.set(url, res);
+      cb(res);
+    } catch(e){ cb(null); }
+  };
+  im.onerror = () => cb(null);
+  im.src = url;
+}
+
 /* 用页面里第一张的上边缘、最后一张的下边缘向外延展，铺成背景 */
 const edgeCache = new Map();
 let edgeSeq = 0;
@@ -573,8 +621,14 @@ function layoutPage(el, page, useCover, isRepeat){
   const H = el.clientHeight || innerHeight;
   const wrap = document.createElement('div');
   wrap.className = 'zoomer';
+  const fo = page[0] && page[0].focus;
+  const fx = fo ? fo.fx : 0.5, fy = fo ? fo.fy : 0.5;
   const zz = zoomScale();
-  if (zz !== 1) wrap.style.transform = 'scale(' + zz + ')';
+  if (zz !== 1){
+    const tx = -(fx - 0.5) * W * (zz - 1);
+    const ty = -(fy - 0.5) * H * (zz - 1);
+    wrap.style.transform = 'translate(' + tx.toFixed(1) + 'px,' + ty.toFixed(1) + 'px) scale(' + zz + ')';
+  }
   el.appendChild(wrap);
   if (isRepeat){
     // 同一张图按原比例上下重复，直到铺满
@@ -582,7 +636,8 @@ function layoutPage(el, page, useCover, isRepeat){
     const ra = (p.w && p.h) ? p.w / p.h : 1.78;
     const h = W / Math.max(0.05, ra);
     const cnt = Math.max(1, Math.ceil(H / h - 0.001));
-    let y = (H - cnt * h) / 2;
+    const over = cnt * h - H;
+    let y = over > 0 ? -over * fy : (H - cnt * h) / 2;
     for (let i = 0; i < cnt; i++){
       const im = document.createElement('img');
       im.className = 'pageImg';
@@ -599,7 +654,8 @@ function layoutPage(el, page, useCover, isRepeat){
     const im = document.createElement('img');
     im.className = 'pageImg';
     im.src = page[0].url;
-    im.style.cssText = 'top:0;left:0;width:' + W + 'px;height:' + H + 'px';
+    im.style.cssText = 'top:0;left:0;width:' + W + 'px;height:' + H + 'px;object-position:' +
+                        (fx * 100).toFixed(1) + '% ' + (fy * 100).toFixed(1) + '%';
     wrap.appendChild(im);
     return;
   }
@@ -666,6 +722,19 @@ function showPhoto(i, animate, dir){
 
   layoutPage(newEl, page, useCover, isRepeat);
   newEl.classList.toggle('noKB', !cfg.kb);
+
+  // 首次遇到这张图：后台算焦点，算完若还停在这张就重排一次
+  if (page.length === 1 && !p0.focus){
+    analyzeImage(p0.url, res => {
+      if (!res) return;
+      p0.focus = res;
+      setTimeout(() => {
+        if (state.photos[state.idx] === p0 && layerEl[state.active]){
+          layoutPage(layerEl[state.active], currentPage(), state.curCover, state.curRepeat);
+        }
+      }, 900);   // 等过渡动画结束再重排，避免闪一下
+    });
+  }
 
   const fin = () => {
     newEl.style.transform = ''; newEl.style.opacity = '';
