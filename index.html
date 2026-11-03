@@ -33,6 +33,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#000;color:#
 #bg.edge.on{opacity:1}
 .layer{position:absolute;inset:0;opacity:0;will-change:transform,opacity;
   transform-origin:center center;pointer-events:none;backface-visibility:hidden}
+.layer .zoomer{position:absolute;inset:0;transform-origin:center center;will-change:transform}
 .layer .pageImg{position:absolute;display:block;object-fit:cover}
 .layer.on{opacity:1;animation:kb 26s ease-out forwards}
 @keyframes kb{from{scale:1.001}to{scale:1.07}}
@@ -249,7 +250,7 @@ select option{background:#1c1c22}
 
 <script>
 "use strict";
-const VER = '2026-11-03.4';
+const VER = '2026-11-03.5';
 /* ============================================================
    图帧 —— 全屏图片 + 可自定义时钟
    ============================================================ */
@@ -559,6 +560,11 @@ function layoutPage(el, page, useCover, isRepeat){
   el.classList.remove('cover');
   const W = el.clientWidth || innerWidth;
   const H = el.clientHeight || innerHeight;
+  const wrap = document.createElement('div');
+  wrap.className = 'zoomer';
+  const zz = zoomScale();
+  if (zz !== 1) wrap.style.transform = 'scale(' + zz + ')';
+  el.appendChild(wrap);
   if (isRepeat){
     // 同一张图按原比例上下重复，直到铺满
     const p = page[0];
@@ -573,7 +579,7 @@ function layoutPage(el, page, useCover, isRepeat){
       const flip = cfg.mirror && (i % 2 === 1);
       im.style.cssText = 'top:' + y.toFixed(2) + 'px;left:0;width:' + W + 'px;height:' +
                          h.toFixed(2) + 'px;' + (flip ? 'transform:scaleY(-1);' : '');
-      el.appendChild(im);
+      wrap.appendChild(im);
       y += h;
     }
     return;
@@ -583,7 +589,7 @@ function layoutPage(el, page, useCover, isRepeat){
     im.className = 'pageImg';
     im.src = page[0].url;
     im.style.cssText = 'top:0;left:0;width:' + W + 'px;height:' + H + 'px';
-    el.appendChild(im);
+    wrap.appendChild(im);
     return;
   }
   const hs = page.map(p => W / Math.max(0.05, (p.w && p.h) ? p.w / p.h : 1.78));
@@ -603,7 +609,7 @@ function layoutPage(el, page, useCover, isRepeat){
     im.src = p.url;
     im.style.cssText = 'top:' + y.toFixed(2) + 'px;left:' + left.toFixed(2) +
                        'px;width:' + w.toFixed(2) + 'px;height:' + hs[i].toFixed(2) + 'px';
-    el.appendChild(im);
+    wrap.appendChild(im);
     y += hs[i];
   });
 }
@@ -642,6 +648,7 @@ function showPhoto(i, animate){
     }
   }
   if (isRepeat) useCover = false;
+  state.curRepeat = isRepeat;
   state.curCover = useCover;
   applyBg(page, useCover || isRepeat);
 
@@ -871,7 +878,7 @@ function applyClockStyle(){
    ============================================================ */
 const view = { scale: 1, x: 0, y: 0 };
 function zoomScale(){
-  if (cfg.fit === 'cover' || !cfg.zoom) return 1;
+  if (cfg.fit === 'cover' || cfg.fit === 'repeat' || state.curRepeat || !cfg.zoom) return 1;
   const p = state.photos[state.idx];
   if (!p || !p.w || !p.h) return 1;
   const a = innerWidth / p.w, b = innerHeight / p.h;
@@ -881,12 +888,20 @@ function zoomScale(){
 function applyView(){
   const el = layerEl[state.active];
   if (!el) return;
-  const z = view.scale * zoomScale();
-  el.style.transform = 'translate(' + view.x + 'px,' + view.y + 'px) scale(' + z + ')';
+  el.style.transform = 'translate(' + view.x + 'px,' + view.y + 'px) scale(' + view.scale + ')';
+}
+/* 缩放微调只作用于内层，避免和过渡动画抢 transform */
+function applyZoom(){
+  const el = layerEl[state.active];
+  const zo = el && el.querySelector('.zoomer');
+  if (!zo) return;
+  const z = zoomScale();
+  zo.style.transform = z === 1 ? '' : 'scale(' + z + ')';
 }
 function resetView(){
   view.scale = 1; view.x = 0; view.y = 0;
   applyView();
+  applyZoom();
 }
 (function(){
   const stage = $('#stage');
@@ -1195,7 +1210,7 @@ bindSeg('#segOrient', ORIENTS, 'orient', () => { applyOrientation(); });
 $('#sZoom').addEventListener('input', e => {
   cfg.zoom = +e.target.value;
   $('#vZoom').textContent = cfg.zoom + '%';
-  applyView(); saveCfg();
+  applyZoom(); saveCfg();
 });
 $('#sInt').addEventListener('input', e => {
   cfg.interval = +e.target.value;
