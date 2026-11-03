@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>图帧</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<style>
+:root{
+  --cs: 64px;          /* 时钟字号 */
+  --cc: #ffffff;       /* 时钟颜色 */
+  --co: .92;           /* 时钟不透明度 */
+  --th: rgba(0,0,0,.001);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#000;color:#fff;
+  font-family:system-ui,-apple-system,"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;
+  user-select:none;-webkit-user-select:none;overscroll-behavior:none}
+
+/* ========== 舞台 ========== */
+#stage{position:fixed;inset:0;overflow:hidden;background:#000;touch-action:none}
+#bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:blur(38px) brightness(.42) saturate(1.15);
+  transform:scale(1.18);opacity:0;transition:opacity .5s}
+#bg.on{opacity:1}
+.layer{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;will-change:transform,opacity;
+  transform-origin:center center;pointer-events:none;backface-visibility:hidden}
+.layer.cover{object-fit:cover}
+.layer.on{opacity:1;animation:kb 26s ease-out forwards}
+@keyframes kb{from{scale:1.001}to{scale:1.07}}
+.layer.noKB{animation:none}
+
+#empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:18px;color:#8b8b93;font-size:15px;pointer-events:none;transition:opacity .3s}
+#empty b{color:#cfcfd6;font-weight:600;font-size:18px;letter-spacing:.06em}
+#empty svg{opacity:.45}
+
+/* ========== 时钟 ========== */
+#clock{position:absolute;left:50%;top:12%;transform:translate(-50%,-50%);
+  text-align:center;padding:10px 18px;border-radius:16px;cursor:grab;z-index:30;
+  color:var(--cc);opacity:var(--co);text-shadow:0 2px 18px rgba(0,0,0,.55);
+  transition:background .25s,opacity .25s;touch-action:none}
+#clock.glass{background:rgba(0,0,0,.28);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  box-shadow:0 6px 30px rgba(0,0,0,.25)}
+#clock.dragging{cursor:grabbing;background:rgba(0,0,0,.4);outline:1px dashed rgba(255,255,255,.5)}
+#clock.hide{display:none}
+.c-time{font-size:var(--cs);line-height:1.02;font-weight:300;letter-spacing:.01em;
+  font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+.c-time.small{font-size:calc(var(--cs) * .42);font-weight:400}
+.c-sec{font-size:.42em;opacity:.7;margin-left:.14em;font-weight:400;vertical-align:.22em}
+.c-sub{font-size:calc(var(--cs) * .19);opacity:.86;margin-top:.32em;letter-spacing:.04em;font-weight:400}
+.c-extra{font-size:calc(var(--cs) * .2);opacity:.8;margin-top:.2em;letter-spacing:.05em}
+.c-extra .cd{font-weight:600;font-variant-numeric:tabular-nums}
+.c-custom{font-size:calc(var(--cs) * .17);opacity:.72;margin-top:.28em;letter-spacing:.08em}
+
+/* ========== 图片信息 ========== */
+#info{position:absolute;left:16px;bottom:calc(96px + var(--safe-b));z-index:25;
+  font-size:12px;color:#e8e8ee;background:rgba(0,0,0,.42);backdrop-filter:blur(8px);
+  padding:6px 11px;border-radius:9px;opacity:0;transition:opacity .45s;pointer-events:none;
+  max-width:70vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#info.on{opacity:1}
+
+/* ========== 控制条 ========== */
+#bar{position:absolute;left:0;right:0;bottom:0;z-index:40;display:flex;align-items:center;justify-content:center;
+  gap:4px;padding:10px 10px calc(10px + var(--safe-b));
+  background:linear-gradient(to top,rgba(0,0,0,.72),rgba(0,0,0,0));
+  transition:opacity .32s,transform .32s}
+#bar.hide{opacity:0;transform:translateY(14px);pointer-events:none}
+.btn{flex:0 0 auto;width:46px;height:46px;display:flex;align-items:center;justify-content:center;
+  border-radius:14px;background:rgba(255,255,255,.09);border:none;color:#fff;cursor:pointer;
+  transition:background .18s,transform .12s}
+.btn:active{transform:scale(.93);background:rgba(255,255,255,.2)}
+.btn svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.btn.wide{width:auto;padding:0 15px;font-size:13px;letter-spacing:.05em}
+.btn.on{background:rgba(255,255,255,.26)}
+
+/* ========== 面板 ========== */
+#panel{position:fixed;inset:0;z-index:60;background:rgba(10,10,12,.86);backdrop-filter:blur(22px);
+  -webkit-backdrop-filter:blur(22px);display:flex;flex-direction:column;
+  transform:translateY(100%);transition:transform .3s cubic-bezier(.3,.9,.3,1);visibility:hidden}
+#panel.open{transform:translateY(0);visibility:visible}
+.p-head{display:flex;align-items:center;gap:10px;padding:calc(12px + var(--safe-t)) 16px 10px;
+  border-bottom:1px solid rgba(255,255,255,.08)}
+.tabs{display:flex;gap:6px;flex:1}
+.tab{padding:8px 15px;border-radius:11px;font-size:14px;color:#9a9aa4;background:none;border:none;cursor:pointer}
+.tab.on{background:rgba(255,255,255,.13);color:#fff}
+.p-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px calc(28px + var(--safe-b))}
+.pane{display:none}
+.pane.on{display:block}
+
+/* 图库 */
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px}
+.cell{position:relative;aspect-ratio:1;border-radius:11px;overflow:hidden;background:#1b1b20;cursor:pointer;
+  outline:2px solid transparent;transition:outline-color .18s}
+.cell img{width:100%;height:100%;object-fit:cover;display:block}
+.cell.cur{outline-color:#5b9cff}
+.cell .del{position:absolute;top:4px;right:4px;width:23px;height:23px;border-radius:50%;
+  background:rgba(0,0,0,.62);border:none;color:#fff;font-size:14px;line-height:1;display:flex;
+  align-items:center;justify-content:center;cursor:pointer}
+
+/* 设置 */
+.row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 0;
+  border-bottom:1px solid rgba(255,255,255,.07);font-size:14px}
+.row .lab{color:#d6d6de;flex:0 0 auto}
+.row .hint{font-size:11px;color:#71717c;margin-top:3px}
+.sw{position:relative;width:46px;height:27px;border-radius:14px;background:rgba(255,255,255,.16);
+  border:none;cursor:pointer;flex:0 0 auto;transition:background .2s}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;
+  background:#fff;transition:transform .2s}
+.sw.on{background:#3f7cff}
+.sw.on::after{transform:translateX(19px)}
+input[type=range]{-webkit-appearance:none;width:132px;height:3px;border-radius:2px;
+  background:rgba(255,255,255,.22);outline:none;flex:0 0 auto}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:19px;height:19px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.5);cursor:pointer}
+input[type=text],input[type=date],select{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);
+  color:#fff;padding:8px 11px;border-radius:9px;font-size:13px;font-family:inherit;outline:none;max-width:52%}
+select option{background:#1c1c22}
+.seg{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.seg button{padding:7px 11px;border-radius:9px;font-size:12.5px;border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.05);color:#c8c8d2;cursor:pointer}
+.seg button.on{background:#3f7cff;border-color:#3f7cff;color:#fff}
+.swatch{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer}
+.swatch.on{border-color:#5b9cff;transform:scale(1.1)}
+.sec-t{font-size:12px;color:#7c7c88;letter-spacing:.12em;margin:22px 0 4px;text-transform:uppercase}
+.danger{color:#ff6b6b}
+
+/* 提示 */
+#toast{position:fixed;left:50%;bottom:calc(110px + var(--safe-b));transform:translate(-50%,10px);
+  z-index:90;background:rgba(28,28,34,.94);color:#fff;font-size:13px;padding:10px 17px;border-radius:12px;
+  opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;max-width:82vw;text-align:center;
+  box-shadow:0 8px 30px rgba(0,0,0,.5)}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <img id="bg" alt="">
+  <img class="layer" id="lyA" alt="">
+  <img class="layer" id="lyB" alt="">
+  <div id="empty">
+    <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+      <rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.6"/>
+      <path d="M21 16l-5.2-5-9.8 9"/></svg>
+    <div><b>还没有图片</b></div>
+    <div>点下面的 ＋ 导入，或把图片拖进来</div>
+  </div>
+  <div id="clock" class="glass hide"></div>
+  <div id="info"></div>
+</div>
+
+<div id="bar" class="hide">
+  <button class="btn" id="bPrev" title="上一张"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+  <button class="btn" id="bPlay" title="播放/暂停"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button>
+  <button class="btn" id="bNext" title="下一张"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+  <button class="btn" id="bAdd" title="导入图片"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+  <button class="btn" id="bLib" title="图库"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg></button>
+  <button class="btn" id="bSet" title="设置"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.1"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 01-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H3a2 2 0 010-4h.1a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 012.8-2.8l.1.1a1.6 1.6 0 001.8.3H9a1.6 1.6 0 001-1.5V3a2 2 0 014 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 012.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V9a1.6 1.6 0 001.5 1H21a2 2 0 010 4h-.1a1.6 1.6 0 00-1.5 1z"/></svg></button>
+  <button class="btn" id="bFull" title="全屏"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3M3 16v3a2 2 0 002 2h3m8 0h3a2 2 0 002-2v-3"/></svg></button>
+  <button class="btn" id="bLock" title="锁定"><svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg></button>
+</div>
+
+<div id="panel">
+  <div class="p-head">
+    <div class="tabs">
+      <button class="tab on" data-p="lib">图库</button>
+      <button class="tab" data-p="set">设置</button>
+    </div>
+    <button class="btn" id="bClose" style="width:38px;height:38px"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="p-body">
+    <div class="pane on" id="pane-lib">
+      <div style="display:flex;gap:10px;margin-bottom:14px">
+        <button class="btn wide" id="bAdd2">＋ 导入图片</button>
+        <button class="btn wide" id="bExp">导出备份</button>
+        <button class="btn wide" id="bImp">恢复备份</button>
+      </div>
+      <div id="grid"></div>
+      <div id="libEmpty" style="color:#6c6c78;font-size:13px;padding:26px 0;text-align:center;display:none">
+        图库是空的
+      </div>
+    </div>
+    <div class="pane" id="pane-set">
+      <div class="sec-t">播放</div>
+      <div class="row"><div><div class="lab">自动轮播</div><div class="hint">关掉就只手动切换</div></div><button class="sw" id="sPlay"></button></div>
+      <div class="row"><div class="lab">切换间隔</div><div style="display:flex;align-items:center;gap:9px">
+        <input type="range" id="sInt" min="2" max="60" step="1"><span id="vInt" style="font-size:13px;color:#9a9aa4;width:36px;text-align:right"></span></div></div>
+      <div class="row"><div class="lab">切换效果</div><div class="seg" id="segTrans"></div></div>
+      <div class="row"><div class="lab">排序</div><div class="seg" id="segSort"></div></div>
+      <div class="row"><div class="lab">填充方式</div><div class="seg" id="segFit"></div></div>
+      <div class="row"><div class="lab">模糊背景垫底</div><div class="hint" style="text-align:right">竖图不黑边</div><button class="sw" id="sBlur"></button></div>
+      <div class="row"><div class="lab">缓慢推拉（Ken Burns）</div><button class="sw" id="sKB"></button></div>
+
+      <div class="sec-t">时钟</div>
+      <div class="row"><div class="lab">显示时钟</div><button class="sw" id="cShow"></button></div>
+      <div class="row"><div class="lab">字号</div><div style="display:flex;align-items:center;gap:9px">
+        <input type="range" id="cSize" min="20" max="180" step="1"><span id="vSize" style="font-size:13px;color:#9a9aa4;width:36px;text-align:right"></span></div></div>
+      <div class="row"><div class="lab">颜色</div><div id="swatches" style="display:flex;gap:9px"></div></div>
+      <div class="row"><div class="lab">不透明度</div><div style="display:flex;align-items:center;gap:9px">
+        <input type="range" id="cOp" min="20" max="100" step="1"><span id="vOp" style="font-size:13px;color:#9a9aa4;width:36px;text-align:right"></span></div></div>
+      <div class="row"><div class="lab">毛玻璃底板</div><button class="sw" id="cGlass"></button></div>
+      <div class="row"><div class="lab">24 小时制</div><button class="sw" id="c24"></button></div>
+      <div class="row"><div class="lab">显示秒</div><button class="sw" id="cSec"></button></div>
+      <div class="row"><div class="lab">显示日期</div><button class="sw" id="cDate"></button></div>
+      <div class="row"><div class="lab">显示星期</div><button class="sw" id="cWeek"></button></div>
+      <div class="row"><div class="lab">显示农历</div><button class="sw" id="cLunar"></button></div>
+      <div class="row"><div class="lab">显示节气</div><button class="sw" id="cJq"></button></div>
+      <div class="row"><div class="lab">倒计时</div><div style="display:flex;align-items:center;gap:8px">
+        <input type="text" id="cCdName" maxlength="6" style="width:64px;max-width:64px;text-align:center" placeholder="考研">
+        <input type="date" id="cCdDate" style="width:132px;max-width:132px"></div></div>
+      <div class="row"><div class="lab">自定义一行</div><input type="text" id="cCustom" maxlength="24" placeholder="留空则不显示"></div>
+      <div class="row"><div class="lab" style="color:#9a9aa4;font-size:12px">拖动画面上的时钟可改位置，双击时钟回到顶部居中</div></div>
+
+      <div class="sec-t">其他</div>
+      <div class="row"><div class="lab">屏幕常亮</div><div class="hint" style="text-align:right">浏览器支持时生效</div><button class="sw" id="sWake"></button></div>
+      <div class="row"><div class="lab">显示图片信息</div><button class="sw" id="sInfo"></button></div>
+      <div class="row"><div class="lab danger">清空全部图片</div><button class="btn wide danger" id="bClear" style="background:rgba(255,80,80,.14)">清空</button></div>
+      <div style="color:#5d5d68;font-size:11px;line-height:1.8;margin-top:24px">
+        存储方式：<span id="storeMode">检测中</span><br>
+        本版本为单文件网页应用，数据只存在本机浏览器里，不上传。
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="fileIn" accept="image/*" multiple hidden>
+<input type="file" id="backIn" accept="application/json" hidden>
+<div id="toast"></div>
+
+<script>
+"use strict";
+/* ============================================================
+   图帧 —— 全屏图片 + 可自定义时钟
+   ============================================================ */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+/* ---------- 默认设置 ---------- */
+const DEF = {
+  playing: true, interval: 8, trans: 'fade', sort: 'add', fit: 'contain',
+  blur: true, kb: true, info: true, wake: true,
+  clock: {
+    show: true, x: 50, y: 12, size: 64, color: '#ffffff', opacity: .92, glass: true,
+    h24: true, sec: true, date: true, week: true, lunar: true, jq: true,
+    cdName: '考研', cdDate: '2026-12-19', custom: ''
+  }
+};
+
+/* ---------- 全局状态 ---------- */
+const state = {
+  photos: [],          // {id,name,blob,w,h,added,url}
+  idx: 0,
+  active: 'A',         // 当前显示的图层
+  timer: null,
+  locked: false,
+  storeMode: 'idb'
+};
+let cfg = loadCfg();
+
+/* ============================================================
+   设置读写
+   ============================================================ */
+function loadCfg(){
+  let raw = null;
+  try { raw = localStorage.getItem('frame.cfg'); } catch(e){}
+  const d = JSON.parse(JSON.stringify(DEF));
+  if (!raw) return d;
+  try {
+    const o = JSON.parse(raw);
+    Object.assign(d, o);
+    d.clock = Object.assign(JSON.parse(JSON.stringify(DEF.clock)), o.clock || {});
+  } catch(e){}
+  return d;
+}
+let saveT = null;
+function saveCfg(){
+  clearTimeout(saveT);
+  saveT = setTimeout(() => {
+    try { localStorage.setItem('frame.cfg', JSON.stringify(cfg)); } catch(e){}
+  }, 160);
+}
+
+/* ============================================================
+   存储：IndexedDB 优先，失败降级 localStorage
+   ============================================================ */
+let db = null;
+function openDB(){
+  return new Promise((res, rej) => {
+    if (!('indexedDB' in window)) return rej(new Error('no idb'));
+    let req;
+    try { req = indexedDB.open('tuzhen', 1); } catch(e){ return rej(e); }
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains('imgs')) d.createObjectStore('imgs', { keyPath: 'id' });
+    };
+    req.onsuccess = e => res(e.target.result);
+    req.onerror = e => rej(e.target.error || new Error('idb error'));
+    req.onblocked = e => rej(new Error('idb blocked'));
+    setTimeout(() => rej(new Error('idb timeout')), 2500);
+  });
+}
+function tx(mode, fn){
+  return new Promise((res, rej) => {
+    const t = db.transaction('imgs', mode);
+    const s = t.objectStore('imgs');
+    let out;
+    const r = fn(s);
+    if (r) r.onsuccess = () => { out = r.result; };
+    t.oncomplete = () => res(out);
+    t.onerror = e => rej(e.target.error);
+  });
+}
+const idbPut    = rec => tx('readwrite', s => s.put(rec));
+const idbDel    = id   => tx('readwrite', s => s.delete(id));
+const idbAll    = ()  => tx('readonly',  s => s.getAll());
+const idbClear  = ()  => tx('readwrite', s => s.clear());
+
+/* localStorage 降级（图片压缩为 dataURL） */
+const LS_KEY = 'frame.imgs.v1';
+function lsAll(){
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch(e){ return []; }
+}
+function lsSave(list){
+  try { localStorage.setItem(LS_KEY, JSON.stringify(list)); }
+  catch(e){ toast('本地空间不足，这张图没能保存'); throw e; }
+}
+function compress(file, maxSide, quality){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const r = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * r); c.height = Math.round(img.height * r);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      try { res(c.toDataURL('image/jpeg', quality)); } catch(e){ rej(e); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('decode')); };
+    img.src = url;
+  });
+}
+
+/* ============================================================
+   图片加载 / 导入 / 删除
+   ============================================================ */
+function measure(file){
+  return new Promise(res => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); res({ w: img.naturalWidth, h: img.naturalHeight }); };
+    img.onerror = () => { URL.revokeObjectURL(url); res({ w: 0, h: 0 }); };
+    img.src = url;
+  });
+}
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+async function addFiles(files){
+  const list = Array.from(files).filter(f => f.type.startsWith('image/'));
+  if (!list.length) { toast('没选到图片'); return; }
+  let ok = 0;
+  for (const f of list){
+    try {
+      const { w, h } = await measure(f);
+      const rec = { id: uid(), name: f.name || '图片', w, h, added: Date.now() };
+      if (state.storeMode === 'idb'){
+        rec.blob = f;
+        await idbPut({ id: rec.id, name: rec.name, w, h, added: rec.added, blob: f });
+        rec.url = URL.createObjectURL(f);
+      } else {
+        const dataUrl = await compress(f, 1600, .82);
+        const arr = lsAll();
+        arr.push({ id: rec.id, name: rec.name, w: w, hh: h, added: rec.added, data: dataUrl });
+        lsSave(arr);
+        rec.url = dataUrl;
+      }
+      state.photos.push(rec);
+      ok++;
+    } catch(e){ console.warn(e); }
+  }
+  if (!ok){ toast('导入失败'); return; }
+  applySort();
+  if (state.photos.length === ok) state.idx = 0;
+  showPhoto(state.idx, false);
+  renderGrid();
+  toast('已导入 ' + ok + ' 张');
+}
+
+async function loadPhotos(){
+  try {
+    db = await openDB();
+    state.storeMode = 'idb';
+    const all = (await idbAll()) || [];
+    state.photos = all.map(r => ({
+      id: r.id, name: r.name, w: r.w, h: r.h, added: r.added,
+      url: URL.createObjectURL(r.blob)
+    }));
+  } catch(e){
+    state.storeMode = 'ls';
+    state.photos = lsAll().map(r => ({
+      id: r.id, name: r.name, w: r.w, h: (r.hh || r.h || 0), added: r.added, url: r.data
+    }));
+  }
+  $('#storeMode').textContent = state.storeMode === 'idb'
+    ? '浏览器数据库（IndexedDB），可长期保存'
+    : '本地存储（localStorage）— 空间有限，约 10 张，且部分环境重开会清空';
+  applySort();
+}
+
+async function delPhoto(id){
+  const i = state.photos.findIndex(p => p.id === id);
+  if (i < 0) return;
+  const p = state.photos[i];
+  state.photos.splice(i, 1);
+  try {
+    if (state.storeMode === 'idb') await idbDel(id);
+    else lsSave(lsAll().filter(r => r.id !== id));
+  } catch(e){}
+  if (p.url && p.url.startsWith('blob:')) URL.revokeObjectURL(p.url);
+  if (state.idx >= state.photos.length) state.idx = Math.max(0, state.photos.length - 1);
+  showPhoto(state.idx, false);
+  renderGrid();
+  toast('已删除');
+}
+
+function applySort(){
+  const m = cfg.sort;
+  state.photos.sort((a, b) =>
+    m === 'random' ? Math.random() - .5 :
+    m === 'name'   ? a.name.localeCompare(b.name, 'zh') :
+                     a.added - b.added);
+}
+
+/* ============================================================
+   显示
+   ============================================================ */
+const layerEl = { A: $('#lyA'), B: $('#lyB') };
+
+function showPhoto(i, animate){
+  const n = state.photos.length;
+  const empty = $('#empty');
+  if (!n){
+    layerEl.A.classList.remove('on'); layerEl.B.classList.remove('on');
+    $('#bg').classList.remove('on');
+    empty.style.opacity = 1;
+    updateInfo(null);
+    return;
+  }
+  empty.style.opacity = 0;
+  state.idx = ((i % n) + n) % n;
+  const p = state.photos[state.idx];
+
+  const curEl = layerEl[state.active];
+  const nk = state.active === 'A' ? 'B' : 'A';
+  const newEl = layerEl[nk];
+
+  // 填充方式
+  [curEl, newEl].forEach(el => el.classList.toggle('cover', cfg.fit === 'cover'));
+
+  // 背景虚化
+  const bg = $('#bg');
+  if (cfg.blur && cfg.fit !== 'cover'){
+    bg.src = p.url; bg.classList.add('on');
+  } else bg.classList.remove('on');
+
+  newEl.src = p.url;
+  newEl.classList.toggle('noKB', !cfg.kb);
+
+  const fin = () => {
+    newEl.style.transform = ''; newEl.style.opacity = '';
+    curEl.style.transform = ''; curEl.style.opacity = '';
+    curEl.classList.remove('on');
+    newEl.classList.add('on');
+    state.active = nk;
+    applyView();
+  };
+
+  if (!animate){
+    curEl.classList.remove('on');
+    newEl.style.opacity = '1';
+    newEl.classList.add('on');
+    fin();
+  } else {
+    const kind = cfg.trans === 'random'
+      ? ['fade','slide','zoom','black'][Math.floor(Math.random() * 4)]
+      : cfg.trans;
+    playTrans(kind, curEl, newEl, fin);
+  }
+  updateInfo(p);
+  renderGridCurrent();
+}
+
+function playTrans(kind, curEl, newEl, done){
+  const D = 780;
+  const base = { duration: D, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'both' };
+  let a1 = null, a2 = null;
+  newEl.classList.remove('on');
+  newEl.style.opacity = '1';
+
+  if (kind === 'slide'){
+    a1 = newEl.animate([{ transform: 'translateX(100%)' }, { transform: 'translateX(0)' }], base);
+    a2 = curEl.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-100%)' }], base);
+  } else if (kind === 'zoom'){
+    newEl.style.opacity = '0';
+    a1 = newEl.animate([
+      { opacity: 0, transform: 'scale(1.16)' },
+      { opacity: 1, transform: 'scale(1)' }], base);
+    a2 = curEl.animate([{ opacity: 1 }, { opacity: 0 }], base);
+  } else if (kind === 'black'){
+    newEl.style.opacity = '0';
+    a1 = newEl.animate([{ opacity: 0 }, { opacity: 0, offset: .35 }, { opacity: 1 }], base);
+    a2 = curEl.animate([{ opacity: 1 }, { opacity: 0, offset: .35 }, { opacity: 0 }], base);
+  } else { // fade
+    newEl.style.opacity = '0';
+    a1 = newEl.animate([{ opacity: 0 }, { opacity: 1 }], base);
+    a2 = curEl.animate([{ opacity: 1 }, { opacity: 0 }], base);
+  }
+  Promise.all([a1.finished.catch(() => {}), a2.finished.catch(() => {})]).then(() => {
+    try { a1.cancel(); a2.cancel(); } catch(e){}
+    done();
+  });
+}
+
+function nextPhoto(d){
+  if (!state.photos.length) return;
+  resetView();
+  showPhoto(state.idx + d, true);
+}
+
+function updateInfo(p){
+  const el = $('#info');
+  if (!p || !cfg.info){ el.classList.remove('on'); return; }
+  el.textContent = p.name + '   ' + p.w + '×' + p.h;
+  el.classList.add('on');
+  clearTimeout(updateInfo._t);
+  updateInfo._t = setTimeout(() => el.classList.remove('on'), 2600);
+}
+
+/* ============================================================
+   自动轮播
+   ============================================================ */
+function schedule(){
+  clearTimeout(state.timer);
+  if (!cfg.playing || state.photos.length < 2) return;
+  state.timer = setTimeout(() => {
+    nextPhoto(1);
+    schedule();
+  }, Math.max(2, cfg.interval) * 1000);
+}
+
+/* ============================================================
+   时钟
+   ============================================================ */
+const WEEK = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+const CN = ['','一','二','三','四','五','六','七','八','九'];
+function cnNum(n){
+  if (n <= 0) return '';
+  if (n < 10) return CN[n];
+  if (n === 10) return '十';
+  if (n < 20) return '十' + CN[n - 10];
+  const t = Math.floor(n / 10), u = n % 10;
+  return CN[t] + '十' + (u ? CN[u] : '');
+}
+function lunarOf(d){
+  try {
+    const f = new Intl.DateTimeFormat('zh-CN-u-ca-chinese', { month: 'long', day: 'numeric' });
+    const parts = f.formatToParts(d);
+    let mo = '', da = '';
+    parts.forEach(p => {
+      if (p.type === 'month') mo = p.value;
+      if (p.type === 'day')   da = p.value;
+    });
+    if (/^\d+$/.test(da)) da = cnNum(parseInt(da, 10));
+    return mo + da;
+  } catch(e){ return ''; }
+}
+/* 24 节气近似：day = int(Y*0.2422 + C) - int((Y-1)/4) */
+const JQ = ['小寒','大寒','立春','雨水','惊蛰','春分','清明','谷雨','立夏','小满','芒种','夏至',
+            '小暑','大暑','立秋','处暑','白露','秋分','寒露','霜降','立冬','小雪','大雪','冬至'];
+const JC = [5.4055,20.12,3.87,18.73,5.63,20.646,4.81,20.1,5.52,21.04,5.678,21.37,
+            7.108,22.83,7.5,23.13,7.646,23.042,8.318,23.438,7.438,22.36,7.18,21.94];
+function jieqiOf(d){
+  const y = d.getFullYear(), m = d.getMonth() + 1, day = d.getDate();
+  const yy = y % 100;
+  for (let k = 0; k < 24; k++){
+    if (Math.floor(k / 2) + 1 !== m) continue;
+    const jd = Math.floor(yy * 0.2422 + JC[k]) - Math.floor((yy - 1) / 4);
+    if (jd === day) return JQ[k];
+  }
+  return '';
+}
+function pad(n){ return n < 10 ? '0' + n : '' + n; }
+
+function tick(){
+  const c = cfg.clock;
+  const el = $('#clock');
+  el.classList.toggle('hide', !c.show);
+  if (c.show){
+    const d = new Date();
+    let h = d.getHours();
+    let ampm = '';
+    if (!c.h24){
+      ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12; if (h === 0) h = 12;
+    }
+    let html = '<div class="c-time">' + (c.h24 ? pad(h) : h) + ':' + pad(d.getMinutes());
+    if (c.sec) html += '<span class="c-sec">' + pad(d.getSeconds()) + '</span>';
+    if (!c.h24) html += '<span class="c-sec">' + ampm + '</span>';
+    html += '</div>';
+
+    const subs = [];
+    if (c.date) subs.push(d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日');
+    if (c.week) subs.push(WEEK[d.getDay()]);
+    if (c.lunar){ const l = lunarOf(d); if (l) subs.push(l); }
+    if (c.jq){ const j = jieqiOf(d); if (j) subs.push(j); }
+    if (subs.length) html += '<div class="c-sub">' + subs.join(' · ') + '</div>';
+
+    if (c.cdDate){
+      const t0 = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const t1 = new Date(c.cdDate + 'T00:00:00');
+      const days = Math.round((t1 - t0) / 86400000);
+      if (!isNaN(days) && days >= 0){
+        html += '<div class="c-extra">距' + (c.cdName || '考研') + ' <span class="cd">' +
+                days + '</span> 天</div>';
+      }
+    }
+    if (c.custom && c.custom.trim())
+      html += '<div class="c-custom">' + esc(c.custom.trim()) + '</div>';
+
+    el.innerHTML = html;
+  }
+  applyClockStyle();
+}
+
+function esc(s){
+  return String(s).replace(/[&<>"]/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));
+}
+function applyClockStyle(){
+  const c = cfg.clock;
+  const el = $('#clock');
+  el.style.left = c.x + '%';
+  el.style.top = c.y + '%';
+  el.style.setProperty('--cs', c.size + 'px');
+  el.style.setProperty('--cc', c.color);
+  el.style.setProperty('--co', c.opacity);
+  el.classList.toggle('glass', !!c.glass);
+}
+
+/* 拖动时钟 */
+(function(){
+  const el = $('#clock');
+  let dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
+  el.addEventListener('pointerdown', e => {
+    if (state.locked) return;
+    dragging = true;
+    el.setPointerCapture(e.pointerId);
+    el.classList.add('dragging');
+    sx = e.clientX; sy = e.clientY;
+    ox = cfg.clock.x; oy = cfg.clock.y;
+    e.stopPropagation();
+  });
+  el.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const dx = (e.clientX - sx) / innerWidth * 100;
+    const dy = (e.clientY - sy) / innerHeight * 100;
+    cfg.clock.x = Math.min(96, Math.max(4, ox + dx));
+    cfg.clock.y = Math.min(96, Math.max(4, oy + dy));
+    applyClockStyle();
+    e.stopPropagation();
+  });
+  el.addEventListener('pointerup', e => {
+    if (!dragging) return;
+    dragging = false;
+    el.classList.remove('dragging');
+    saveCfg();
+    e.stopPropagation();
+  });
+  el.addEventListener('click', e => e.stopPropagation());
+  el.addEventListener('dblclick', () => {
+    cfg.clock.x = 50; cfg.clock.y = 12;
+    applyClockStyle(); saveCfg();
+    toast('时钟位置已复位');
+  });
+})();
+
+/* ============================================================
+   手势：滑动切换 / 双指缩放 / 拖动
+   ============================================================ */
+const view = { scale: 1, x: 0, y: 0 };
+function applyView(){
+  const el = layerEl[state.active];
+  if (!el) return;
+  el.style.transform = 'translate(' + view.x + 'px,' + view.y + 'px) scale(' + view.scale + ')';
+}
+function resetView(){
+  view.scale = 1; view.x = 0; view.y = 0;
+  const cur = layerEl[state.active];
+  if (cur){ cur.style.transform = ''; }
+}
+(function(){
+  const stage = $('#stage');
+  let pinch = null, drag = null, swiped = false;
+
+  stage.addEventListener('touchstart', e => {
+    if (state.locked) return;
+    if (e.touches.length === 2){
+      pinch = { d: dist(e.touches), s: view.scale };
+      drag = null;
+    } else if (e.touches.length === 1){
+      drag = { x: e.touches[0].clientX, y: e.touches[0].clientY, vx: view.x, vy: view.y, moved: false };
+      swiped = false;
+    }
+  }, { passive: true });
+
+  stage.addEventListener('touchmove', e => {
+    if (state.locked) return;
+    if (pinch && e.touches.length === 2){
+      const r = dist(e.touches) / pinch.d;
+      view.scale = Math.min(6, Math.max(1, pinch.s * r));
+      if (view.scale === 1){ view.x = 0; view.y = 0; }
+      applyView();
+      e.preventDefault();
+    } else if (drag && e.touches.length === 1 && view.scale > 1.02){
+      view.x = drag.vx + (e.touches[0].clientX - drag.x);
+      view.y = drag.vy + (e.touches[0].clientY - drag.y);
+      applyView();
+      e.preventDefault();
+    } else if (drag && e.touches.length === 1){
+      const dx = e.touches[0].clientX - drag.x;
+      const dy = e.touches[0].clientY - drag.y;
+      const el = layerEl[state.active];
+      if (el && Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy) * 1.4){
+        drag.moved = true;
+        el.style.transition = 'none';
+        el.style.transform = 'translateX(' + dx + 'px)';
+      }
+    }
+  }, { passive: false });
+
+  stage.addEventListener('touchend', e => {
+    if (state.locked) { pinch = null; drag = null; return; }
+    if (pinch && e.touches.length < 2){
+      pinch = null;
+      if (view.scale < 1.05){ resetView(); }
+      return;
+    }
+    if (drag){
+      if (drag.moved){
+        const el = layerEl[state.active];
+        const dx = e.changedTouches[0].clientX - drag.x;
+        if (el){ el.style.transition = ''; el.style.transform = ''; }
+        if (Math.abs(dx) > 60) { nextPhoto(dx < 0 ? 1 : -1); swiped = true; }
+      } else if (!swiped){
+        toggleBar();
+      }
+      drag = null;
+    }
+  });
+  function dist(t){
+    const dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY;
+    return Math.hypot(dx, dy) || 1;
+  }
+  // 双击缩放
+  let lastTap = 0;
+  stage.addEventListener('click', e => {
+    if (state.locked) return;
+    if (e.target.closest('#clock') || e.target.closest('#bar')) return;
+    const now = Date.now();
+    if (now - lastTap < 300){
+      if (view.scale > 1.05) resetView();
+      else { view.scale = 2.2; applyView(); }
+      lastTap = 0;
+    } else lastTap = now;
+  });
+})();
+
+/* ============================================================
+   控制条 / 面板
+   ============================================================ */
+let barTimer = null;
+function showBar(){
+  if (state.locked) return;
+  const b = $('#bar');
+  b.classList.remove('hide');
+  clearTimeout(barTimer);
+  barTimer = setTimeout(() => b.classList.add('hide'), 3800);
+}
+function toggleBar(){
+  const b = $('#bar');
+  if (b.classList.contains('hide')) showBar();
+  else { clearTimeout(barTimer); b.classList.add('hide'); }
+}
+function toast(msg){
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('on'), 1900);
+}
+
+function openPanel(tab){
+  if (state.locked) return;
+  $('#panel').classList.add('open');
+  switchTab(tab || 'lib');
+  renderGrid();
+  syncUI();
+}
+function closePanel(){ $('#panel').classList.remove('open'); }
+function switchTab(name){
+  $$('.tab').forEach(b => b.classList.toggle('on', b.dataset.p === name));
+  $$('.pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + name));
+}
+
+/* ============================================================
+   图库渲染
+   ============================================================ */
+function renderGrid(){
+  const g = $('#grid');
+  $('#libEmpty').style.display = state.photos.length ? 'none' : 'block';
+  g.innerHTML = '';
+  state.photos.forEach((p, i) => {
+    const c = document.createElement('div');
+    c.className = 'cell' + (i === state.idx ? ' cur' : '');
+    c.dataset.i = i;
+    const im = document.createElement('img');
+    im.src = p.url; im.loading = 'lazy'; im.alt = p.name;
+    const d = document.createElement('button');
+    d.className = 'del'; d.textContent = '×'; d.title = '删除';
+    d.addEventListener('click', ev => { ev.stopPropagation(); delPhoto(p.id); });
+    c.appendChild(im); c.appendChild(d);
+    c.addEventListener('click', () => {
+      resetView(); showPhoto(i, true); schedule(); closePanel(); showBar();
+    });
+    g.appendChild(c);
+  });
+}
+function renderGridCurrent(){
+  $$('#grid .cell').forEach((c, i) => c.classList.toggle('cur', i === state.idx));
+}
+
+/* ============================================================
+   设置界面同步
+   ============================================================ */
+const TRANS = [['fade','淡入淡出'],['slide','左右滑动'],['zoom','缩放'],['black','黑场'],['random','随机']];
+const SORTS = [['add','添加顺序'],['name','按名称'],['random','随机']];
+const FITS  = [['contain','完整显示'],['cover','铺满']];
+const COLORS = ['#ffffff','#f5e6c8','#ffd6a5','#a8d8ff','#c9f7d0','#ffc9de','#d9c9ff','#9a9aa4'];
+
+$$('.tab').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.p)));
+$('#bClose').addEventListener('click', closePanel);
+$('#bLib').addEventListener('click', () => openPanel('lib'));
+$('#bSet').addEventListener('click', () => openPanel('set'));
+$('#bAdd').addEventListener('click', () => $('#fileIn').click());
+$('#bAdd2').addEventListener('click', () => $('#fileIn').click());
+$('#bPrev').addEventListener('click', () => { nextPhoto(-1); schedule(); showBar(); });
+$('#bNext').addEventListener('click', () => { nextPhoto(1); schedule(); showBar(); });
+$('#bPlay').addEventListener('click', togglePlay);
+$('#bFull').addEventListener('click', async () => {
+  try {
+    if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+    else await document.exitFullscreen();
+  } catch(e){ toast('这台浏览器不让全屏'); }
+});
+$('#bLock').addEventListener('click', () => setLocked(true));
+$('#bClear').addEventListener('click', async () => {
+  if (!confirm('确定清空全部图片？这个操作不能撤销。')) return;
+  state.photos.forEach(p => { if (p.url.startsWith('blob:')) URL.revokeObjectURL(p.url); });
+  state.photos = [];
+  try {
+    if (state.storeMode === 'idb') await idbClear();
+    else localStorage.removeItem(LS_KEY);
+  } catch(e){}
+  showPhoto(0, false); renderGrid(); toast('已清空');
+});
+
+$('#fileIn').addEventListener('change', e => {
+  addFiles(e.target.files).then(() => { e.target.value = ''; schedule(); showBar(); });
+});
+
+/* 拖拽导入 */
+['dragover','drop'].forEach(t => document.addEventListener(t, e => {
+  e.preventDefault();
+  if (t === 'drop' && e.dataTransfer && e.dataTransfer.files.length)
+    addFiles(e.dataTransfer.files).then(schedule);
+}));
+
+function togglePlay(){
+  cfg.playing = !cfg.playing;
+  $('#bPlay').classList.toggle('on', cfg.playing);
+  $('#bPlay').innerHTML = cfg.playing
+    ? '<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>'
+    : '<svg viewBox="0 0 24 24"><path d="M7 4l12 8-12 8z"/></svg>';
+  saveCfg(); schedule(); syncUI();
+  toast(cfg.playing ? '自动轮播已开' : '已暂停');
+}
+
+function setLocked(v){
+  state.locked = v;
+  $('#bar').classList.add('hide');
+  if (v){
+    toast('已锁定，长按屏幕 2 秒解锁');
+    lockWatch();
+  }
+}
+let lockT = null;
+function lockWatch(){
+  const st = $('#stage');
+  if (lockWatch._bound) return;
+  lockWatch._bound = true;
+  st.addEventListener('pointerdown', e => {
+    if (!state.locked) return;
+    lockT = setTimeout(() => {
+      state.locked = false;
+      toast('已解锁');
+      showBar();
+    }, 2000);
+  });
+  ['pointerup','pointercancel','pointermove'].forEach(t =>
+    st.addEventListener(t, () => { clearTimeout(lockT); }));
+}
+
+/* ---- 设置控件 ---- */
+function segHTML(sel, arr, cur){
+  return arr.map(([v, t]) =>
+    '<button data-v="' + v + '" class="' + (v === cur ? 'on' : '') + '">' + t + '</button>').join('');
+}
+function bindSeg(sel, arr, key, apply){
+  const box = $(sel);
+  box.innerHTML = segHTML(sel, arr, cfg[key]);
+  box.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    cfg[key] = b.dataset.v;
+    box.innerHTML = segHTML(sel, arr, cfg[key]);
+    saveCfg(); if (apply) apply();
+  });
+}
+function bindSw(sel, get, set){
+  const el = $(sel);
+  const sync = () => el.classList.toggle('on', !!get());
+  el.addEventListener('click', () => { set(!get()); sync(); saveCfg(); });
+  sync();
+  return sync;
+}
+
+function syncUI(){
+  const c = cfg.clock;
+  $('#sInt').value = cfg.interval; $('#vInt').textContent = cfg.interval + 's';
+  $('#sPlay').classList.toggle('on', cfg.playing);
+  $('#sBlur').classList.toggle('on', cfg.blur);
+  $('#sKB').classList.toggle('on', cfg.kb);
+  $('#sInfo').classList.toggle('on', cfg.info);
+  $('#sWake').classList.toggle('on', cfg.wake);
+  $('#cShow').classList.toggle('on', c.show);
+  $('#cGlass').classList.toggle('on', c.glass);
+  $('#c24').classList.toggle('on', c.h24);
+  $('#cSec').classList.toggle('on', c.sec);
+  $('#cDate').classList.toggle('on', c.date);
+  $('#cWeek').classList.toggle('on', c.week);
+  $('#cLunar').classList.toggle('on', c.lunar);
+  $('#cJq').classList.toggle('on', c.jq);
+  $('#cSize').value = c.size; $('#vSize').textContent = c.size;
+  $('#cOp').value = Math.round(c.opacity * 100); $('#vOp').textContent = Math.round(c.opacity * 100) + '%';
+  $('#cCdName').value = c.cdName;
+  $('#cCdDate').value = c.cdDate;
+  $('#cCustom').value = c.custom;
+  $('#bPlay').classList.toggle('on', cfg.playing);
+  $$('#swatches .swatch').forEach(s => s.classList.toggle('on', s.dataset.c === c.color));
+  applyClockStyle();
+}
+
+bindSeg('#segTrans', TRANS, 'trans', () => {});
+bindSeg('#segSort', SORTS, 'sort', () => { applySort(); showPhoto(0, false); renderGrid(); });
+bindSeg('#segFit', FITS, 'fit', () => { showPhoto(state.idx, false); });
+
+$('#sInt').addEventListener('input', e => {
+  cfg.interval = +e.target.value;
+  $('#vInt').textContent = cfg.interval + 's';
+  saveCfg(); schedule();
+});
+bindSw('#sPlay', () => cfg.playing, v => { cfg.playing = v; schedule(); });
+bindSw('#sBlur', () => cfg.blur, v => { cfg.blur = v; showPhoto(state.idx, false); });
+bindSw('#sKB', () => cfg.kb, v => { cfg.kb = v; showPhoto(state.idx, false); });
+bindSw('#sInfo', () => cfg.info, v => { cfg.info = v; updateInfo(state.photos[state.idx]); });
+bindSw('#sWake', () => cfg.wake, v => { cfg.wake = v; if (v) keepAwake(); });
+
+bindSw('#cShow',  () => cfg.clock.show,  v => { cfg.clock.show = v; tick(); });
+bindSw('#cGlass', () => cfg.clock.glass, v => { cfg.clock.glass = v; applyClockStyle(); });
+bindSw('#c24',    () => cfg.clock.h24,   v => { cfg.clock.h24 = v; tick(); });
+bindSw('#cSec',   () => cfg.clock.sec,   v => { cfg.clock.sec = v; tick(); });
+bindSw('#cDate',  () => cfg.clock.date,  v => { cfg.clock.date = v; tick(); });
+bindSw('#cWeek',  () => cfg.clock.week,  v => { cfg.clock.week = v; tick(); });
+bindSw('#cLunar', () => cfg.clock.lunar, v => { cfg.clock.lunar = v; tick(); });
+bindSw('#cJq',    () => cfg.clock.jq,    v => { cfg.clock.jq = v; tick(); });
+
+$('#cSize').addEventListener('input', e => {
+  cfg.clock.size = +e.target.value;
+  $('#vSize').textContent = cfg.clock.size;
+  applyClockStyle(); saveCfg();
+});
+$('#cOp').addEventListener('input', e => {
+  cfg.clock.opacity = +e.target.value / 100;
+  $('#vOp').textContent = e.target.value + '%';
+  applyClockStyle(); saveCfg();
+});
+$('#cCdName').addEventListener('input', e => { cfg.clock.cdName = e.target.value; saveCfg(); tick(); });
+$('#cCdDate').addEventListener('change', e => { cfg.clock.cdDate = e.target.value; saveCfg(); tick(); });
+$('#cCustom').addEventListener('input', e => { cfg.clock.custom = e.target.value; saveCfg(); tick(); });
+
+/* 颜色色块 */
+(function(){
+  const box = $('#swatches');
+  box.innerHTML = COLORS.map(c =>
+    '<button class="swatch" data-c="' + c + '" style="background:' + c + '"></button>').join('');
+  box.addEventListener('click', e => {
+    const b = e.target.closest('.swatch');
+    if (!b) return;
+    cfg.clock.color = b.dataset.c;
+    $$('#swatches .swatch').forEach(s => s.classList.toggle('on', s.dataset.c === cfg.clock.color));
+    applyClockStyle(); saveCfg();
+  });
+})();
+
+/* ============================================================
+   备份导出 / 恢复
+   ============================================================ */
+$('#bExp').addEventListener('click', async () => {
+  if (!state.photos.length) return toast('图库是空的');
+  toast('正在打包…');
+  const out = [];
+  for (const p of state.photos){
+    let data = p.url;
+    if (p.url.startsWith('blob:')){
+      try { data = await blobToDataURL(p.url); } catch(e){ continue; }
+    }
+    out.push({ name: p.name, w: p.w, h: p.h, added: p.added, data });
+  }
+  const blob = new Blob([JSON.stringify({ v: 1, photos: out, cfg })], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '图帧备份-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+});
+function blobToDataURL(url){
+  return new Promise((res, rej) => {
+    const x = new XMLHttpRequest();
+    x.open('GET', url); x.responseType = 'blob';
+    x.onload = () => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = rej;
+      r.readAsDataURL(x.response);
+    };
+    x.onerror = rej;
+    x.send();
+  });
+}
+$('#bImp').addEventListener('click', () => $('#backIn').click());
+$('#backIn').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try {
+    const txt = await f.text();
+    const o = JSON.parse(txt);
+    if (!o.photos) throw new Error('bad file');
+    if (o.cfg) { cfg = Object.assign(cfg, o.cfg); cfg.clock = Object.assign(DEF.clock, o.cfg.clock || {}); saveCfg(); syncUI(); }
+    for (const p of o.photos){
+      const blob = dataURLtoBlob(p.data);
+      const rec = { id: uid(), name: p.name || '图片', w: p.w || 0, h: p.h || 0, added: p.added || Date.now() };
+      if (state.storeMode === 'idb'){
+        await idbPut({ id: rec.id, name: rec.name, w: rec.w, h: rec.h, added: rec.added, blob });
+        rec.url = URL.createObjectURL(blob);
+      } else {
+        const arr = lsAll();
+        arr.push({ id: rec.id, name: rec.name, w: rec.w, hh: rec.h, added: rec.added, data: p.data });
+        lsSave(arr); rec.url = p.data;
+      }
+      state.photos.push(rec);
+    }
+    applySort(); showPhoto(0, false); renderGrid(); tick();
+    toast('已恢复 ' + o.photos.length + ' 张');
+  } catch(err){ toast('恢复失败：文件格式不对'); }
+  e.target.value = '';
+});
+function dataURLtoBlob(d){
+  const [head, body] = d.split(',');
+  const mime = (head.match(/:(.*?);/) || [,'image/jpeg'])[1];
+  const bin = atob(body);
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return new Blob([u8], { type: mime });
+}
+
+/* ============================================================
+   屏幕常亮
+   ============================================================ */
+let wakeLock = null;
+async function keepAwake(){
+  if (!cfg.wake) return;
+  try {
+    if ('wakeLock' in navigator){
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    }
+  } catch(e){}
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible'){ keepAwake(); tick(); }
+});
+
+/* ============================================================
+   键盘（桌面调试用）
+   ============================================================ */
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'ArrowRight') { nextPhoto(1); schedule(); }
+  if (e.key === 'ArrowLeft')  { nextPhoto(-1); schedule(); }
+  if (e.key === ' '){ e.preventDefault(); togglePlay(); }
+  if (e.key === 'f' || e.key === 'F') $('#bFull').click();
+  if (e.key === 'Escape') closePanel();
+});
+
+/* ============================================================
+   启动
+   ============================================================ */
+(async function boot(){
+  await loadPhotos();
+  renderGrid();
+  showPhoto(0, false);
+  tick();
+  syncUI();
+  setInterval(tick, 1000);
+  schedule();
+  showBar();
+  keepAwake();
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')){
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>

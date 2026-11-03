@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b2233"/>
+      <stop offset="1" stop-color="#05060a"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#g)"/>
+  <rect x="96" y="112" width="320" height="288" rx="34" fill="none" stroke="#ffffff" stroke-opacity=".92" stroke-width="18"/>
+  <circle cx="184" cy="196" r="26" fill="#ffd479"/>
+  <path d="M120 372l96-104 74 78 52-44 70 70" fill="none" stroke="#ffffff" stroke-opacity=".92" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="256" y="470" font-family="system-ui,-apple-system,'PingFang SC',sans-serif" font-size="70" font-weight="600" fill="#ffffff" fill-opacity=".92" text-anchor="middle">图帧</text>
+</svg>
