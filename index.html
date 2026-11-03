@@ -29,9 +29,11 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#000;color:#
 #bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:blur(38px) brightness(.42) saturate(1.15);
   transform:scale(1.18);opacity:0;transition:opacity .5s}
 #bg.on{opacity:1}
-.layer{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;will-change:transform,opacity;
+#bg.edge{filter:blur(20px) saturate(1.06) brightness(.9);transform:scale(1.04)}
+#bg.edge.on{opacity:1}
+.layer{position:absolute;inset:0;opacity:0;will-change:transform,opacity;
   transform-origin:center center;pointer-events:none;backface-visibility:hidden}
-.layer.cover{object-fit:cover}
+.layer .pageImg{position:absolute;display:block;object-fit:cover}
 .layer.on{opacity:1;animation:kb 26s ease-out forwards}
 @keyframes kb{from{scale:1.001}to{scale:1.07}}
 .layer.noKB{animation:none}
@@ -137,14 +139,18 @@ select option{background:#1c1c22}
   opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;max-width:82vw;text-align:center;
   box-shadow:0 8px 30px rgba(0,0,0,.5)}
 #toast.on{opacity:1;transform:translate(-50%,0)}
+@media (max-width:430px){
+  .btn{width:41px;height:41px}
+  #bar{gap:2px;padding:9px 6px calc(9px + var(--safe-b))}
+}
 </style>
 </head>
 <body>
 
 <div id="stage">
   <img id="bg" alt="">
-  <img class="layer" id="lyA" alt="">
-  <img class="layer" id="lyB" alt="">
+  <div class="layer" id="lyA"></div>
+  <div class="layer" id="lyB"></div>
   <div id="empty">
     <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
       <rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.6"/>
@@ -194,8 +200,10 @@ select option{background:#1c1c22}
         <input type="range" id="sInt" min="2" max="60" step="1"><span id="vInt" style="font-size:13px;color:#9a9aa4;width:36px;text-align:right"></span></div></div>
       <div class="row"><div class="lab">切换效果</div><div class="seg" id="segTrans"></div></div>
       <div class="row"><div class="lab">排序</div><div class="seg" id="segSort"></div></div>
+      <div class="row"><div><div class="lab">每屏张数</div><div class="hint">自动＝竖图单张、横图最多叠 3 张</div></div><div class="seg" id="segPer"></div></div>
       <div class="row"><div class="lab">填充方式</div><div class="seg" id="segFit"></div></div>
-      <div class="row"><div class="lab">模糊背景垫底</div><div class="hint" style="text-align:right">竖图不黑边</div><button class="sw" id="sBlur"></button></div>
+      <div class="row"><div><div class="lab">空白填充</div><div class="hint">图片没铺满屏幕时，空出来的部分放什么</div></div><div class="seg" id="segFill"></div></div>
+      <div class="row"><div><div class="lab">缩放微调</div><div class="hint">往右把图放大，100 等于铺满</div></div><div style="display:flex;align-items:center;gap:9px"><input type="range" id="sZoom" min="0" max="100" step="1"><span id="vZoom" style="font-size:13px;color:#9a9aa4;width:38px;text-align:right"></span></div></div>
       <div class="row"><div class="lab">缓慢推拉（Ken Burns）</div><button class="sw" id="sKB"></button></div>
 
       <div class="sec-t">时钟</div>
@@ -219,6 +227,7 @@ select option{background:#1c1c22}
       <div class="row"><div class="lab" style="color:#9a9aa4;font-size:12px">拖动画面上的时钟可改位置，双击时钟回到顶部居中</div></div>
 
       <div class="sec-t">其他</div>
+      <div class="row"><div><div class="lab">屏幕方向</div><div class="hint">浏览器允许时生效，失败请用手机系统的自动旋转开关</div></div><div class="seg" id="segOrient"></div></div>
       <div class="row"><div class="lab">屏幕常亮</div><div class="hint" style="text-align:right">浏览器支持时生效</div><button class="sw" id="sWake"></button></div>
       <div class="row"><div class="lab">显示图片信息</div><button class="sw" id="sInfo"></button></div>
       <div class="row"><div class="lab danger">清空全部图片</div><button class="btn wide danger" id="bClear" style="background:rgba(255,80,80,.14)">清空</button></div>
@@ -245,7 +254,7 @@ const $$ = s => Array.from(document.querySelectorAll(s));
 /* ---------- 默认设置 ---------- */
 const DEF = {
   playing: true, interval: 8, trans: 'fade', sort: 'add', fit: 'contain',
-  blur: true, kb: true, info: true, wake: true,
+  fill: 'blur', zoom: 0, perPage: '1', blur: true, kb: true, info: true, wake: true, orient: 'auto',
   clock: {
     show: true, x: 50, y: 12, size: 64, color: '#ffffff', opacity: .92, glass: true,
     h24: true, sec: true, date: true, week: true, lunar: true, jq: true,
@@ -443,11 +452,136 @@ function applySort(){
    ============================================================ */
 const layerEl = { A: $('#lyA'), B: $('#lyB') };
 
+/* 用页面里第一张的上边缘、最后一张的下边缘向外延展，铺成背景 */
+const edgeCache = new Map();
+let edgeSeq = 0;
+function loadImg(url){
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => res(im);
+    im.onerror = rej;
+    im.src = url;
+  });
+}
+function buildEdge(page, cb){
+  const key = page.map(x => x.id).join('|');
+  if (edgeCache.has(key)) { cb(edgeCache.get(key)); return; }
+  (async () => {
+    try {
+      const first = await loadImg(page[0].url);
+      const last  = page.length > 1 ? await loadImg(page[page.length - 1].url) : first;
+      const ratio = Math.max(.25, innerWidth / Math.max(1, innerHeight));
+      const W = 420, H = Math.round(W / ratio);
+      const c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      const ctx = c.getContext('2d');
+      const b1 = Math.max(1, Math.round(first.naturalHeight * 0.006));
+      ctx.drawImage(first, 0, 0, first.naturalWidth, b1, 0, 0, W, Math.round(H * 0.52));
+      const b2 = Math.max(1, Math.round(last.naturalHeight * 0.006));
+      ctx.drawImage(last, 0, last.naturalHeight - b2, last.naturalWidth, b2,
+                    0, Math.round(H * 0.48), W, Math.round(H * 0.52));
+      const data = c.toDataURL('image/jpeg', .8);
+      edgeCache.set(key, data);
+      cb(data);
+    } catch(e){ cb(null); }
+  })();
+}
+function applyBg(page, useCover){
+  const bg = $('#bg');
+  if (!page || !page.length || useCover || cfg.fill === 'none'){
+    bg.classList.remove('on', 'edge');
+    return;
+  }
+  if (cfg.fill === 'blur'){
+    bg.classList.remove('edge');
+    bg.src = page[0].url;
+    bg.classList.add('on');
+    return;
+  }
+  const mine = ++edgeSeq;
+  buildEdge(page, data => {
+    if (mine !== edgeSeq || !data) return;
+    bg.classList.add('edge');
+    bg.src = data;
+    bg.classList.add('on');
+  });
+}
+
+/* 一页排几张：竖图单张、横图成组 */
+function currentPage(){
+  const n = state.photos.length;
+  let count = 1;
+  if (cfg.perPage === 'auto' && n > 1){
+    const W = innerWidth, H = innerHeight;
+    const asc = i => {
+      const p = state.photos[i];
+      return (p.w && p.h) ? p.w / p.h : 1.78;
+    };
+    const hOf = i => W / Math.max(0.05, asc(i));
+    const r0 = asc(state.idx);
+    let sum = hOf(state.idx);
+    // 竖图（或接近方形）在竖屏上本来就顶满，单独占一页；
+    // 横图才继续往下叠，遇到竖图立刻收页，避免一页里大小悬殊
+    if (r0 >= 1.02){
+      for (let k = 1; k < 4 && k < n; k++){
+        const idx = (state.idx + k) % n;
+        if (asc(idx) < 1.02) break;                 // 后面是竖图，收页
+        const h = hOf(idx);
+        if (sum + h > H * 0.99) break;              // 放不下，收页
+        sum += h; count = k + 1;
+      }
+    }
+  } else {
+    count = Math.min(Math.max(1, parseInt(cfg.perPage, 10) || 1), n);
+  }
+  const out = [];
+  for (let k = 0; k < count; k++) out.push(state.photos[(state.idx + k) % n]);
+  return out;
+}
+
+/* 按图片真实比例竖排，剩余空间上下平分 */
+function layoutPage(el, page, useCover){
+  el.textContent = '';
+  if (!page || !page.length) return;
+  el.classList.remove('cover');
+  const W = el.clientWidth || innerWidth;
+  const H = el.clientHeight || innerHeight;
+  if (useCover){
+    const im = document.createElement('img');
+    im.className = 'pageImg';
+    im.src = page[0].url;
+    im.style.cssText = 'top:0;left:0;width:' + W + 'px;height:' + H + 'px';
+    el.appendChild(im);
+    return;
+  }
+  const hs = page.map(p => W / Math.max(0.05, (p.w && p.h) ? p.w / p.h : 1.78));
+  let S = hs.reduce((a, b) => a + b, 0);
+  let sc = 1;
+  if (S > H){
+    sc = H / S;
+    for (let i = 0; i < hs.length; i++) hs[i] *= sc;
+    S = H;
+  }
+  const R = Math.max(0, H - S);
+  const w = W * sc, left = (W - w) / 2;
+  let y = R / 2;
+  page.forEach((p, i) => {
+    const im = document.createElement('img');
+    im.className = 'pageImg';
+    im.src = p.url;
+    im.style.cssText = 'top:' + y.toFixed(2) + 'px;left:' + left.toFixed(2) +
+                       'px;width:' + w.toFixed(2) + 'px;height:' + hs[i].toFixed(2) + 'px';
+    el.appendChild(im);
+    y += hs[i];
+  });
+}
+
 function showPhoto(i, animate){
   const n = state.photos.length;
   const empty = $('#empty');
   if (!n){
     layerEl.A.classList.remove('on'); layerEl.B.classList.remove('on');
+    layerEl.A.textContent = ''; layerEl.B.textContent = '';
     $('#bg').classList.remove('on');
     empty.style.opacity = 1;
     updateInfo(null);
@@ -455,22 +589,25 @@ function showPhoto(i, animate){
   }
   empty.style.opacity = 0;
   state.idx = ((i % n) + n) % n;
-  const p = state.photos[state.idx];
+
+  const page = currentPage();
+  state.pageLen = page.length;
+  const p0 = page[0];
 
   const curEl = layerEl[state.active];
   const nk = state.active === 'A' ? 'B' : 'A';
   const newEl = layerEl[nk];
 
-  // 填充方式
-  [curEl, newEl].forEach(el => el.classList.toggle('cover', cfg.fit === 'cover'));
+  // 填充方式：完整 / 智能 / 铺满
+  let useCover = cfg.fit === 'cover';
+  if (cfg.fit === 'auto' && p0.w && p0.h && page.length === 1){
+    const ra = p0.w / p0.h, rs = innerWidth / innerHeight;
+    useCover = Math.abs(ra / rs - 1) < 0.12;
+  }
+  state.curCover = useCover;
+  applyBg(page, useCover);
 
-  // 背景虚化
-  const bg = $('#bg');
-  if (cfg.blur && cfg.fit !== 'cover'){
-    bg.src = p.url; bg.classList.add('on');
-  } else bg.classList.remove('on');
-
-  newEl.src = p.url;
+  layoutPage(newEl, page, useCover);
   newEl.classList.toggle('noKB', !cfg.kb);
 
   const fin = () => {
@@ -493,7 +630,7 @@ function showPhoto(i, animate){
       : cfg.trans;
     playTrans(kind, curEl, newEl, fin);
   }
-  updateInfo(p);
+  updateInfo(page);
   renderGridCurrent();
 }
 
@@ -531,13 +668,14 @@ function playTrans(kind, curEl, newEl, done){
 function nextPhoto(d){
   if (!state.photos.length) return;
   resetView();
-  showPhoto(state.idx + d, true);
+  showPhoto(state.idx + d * (state.pageLen || 1), true);
 }
 
-function updateInfo(p){
+function updateInfo(page){
   const el = $('#info');
-  if (!p || !cfg.info){ el.classList.remove('on'); return; }
-  el.textContent = p.name + '   ' + p.w + '×' + p.h;
+  if (!page || !page.length || !cfg.info){ el.classList.remove('on'); return; }
+  const p = page[0];
+  el.textContent = (page.length > 1 ? page.length + ' 张 · ' : '') + p.name + '   ' + p.w + '×' + p.h;
   el.classList.add('on');
   clearTimeout(updateInfo._t);
   updateInfo._t = setTimeout(() => el.classList.remove('on'), 2600);
@@ -694,15 +832,23 @@ function applyClockStyle(){
    手势：滑动切换 / 双指缩放 / 拖动
    ============================================================ */
 const view = { scale: 1, x: 0, y: 0 };
+function zoomScale(){
+  if (cfg.fit === 'cover' || !cfg.zoom) return 1;
+  const p = state.photos[state.idx];
+  if (!p || !p.w || !p.h) return 1;
+  const a = innerWidth / p.w, b = innerHeight / p.h;
+  const s = Math.max(a, b) / Math.min(a, b);   // 刚好铺满所需的倍数
+  return 1 + (s - 1) * (cfg.zoom / 100);
+}
 function applyView(){
   const el = layerEl[state.active];
   if (!el) return;
-  el.style.transform = 'translate(' + view.x + 'px,' + view.y + 'px) scale(' + view.scale + ')';
+  const z = view.scale * zoomScale();
+  el.style.transform = 'translate(' + view.x + 'px,' + view.y + 'px) scale(' + z + ')';
 }
 function resetView(){
   view.scale = 1; view.x = 0; view.y = 0;
-  const cur = layerEl[state.active];
-  if (cur){ cur.style.transform = ''; }
+  applyView();
 }
 (function(){
   const stage = $('#stage');
@@ -842,7 +988,9 @@ function renderGrid(){
   });
 }
 function renderGridCurrent(){
-  $$('#grid .cell').forEach((c, i) => c.classList.toggle('cur', i === state.idx));
+  const n = state.pageLen || 1, total = state.photos.length;
+  $$('#grid .cell').forEach((c, i) =>
+    c.classList.toggle('cur', i >= state.idx && i < state.idx + n && i < total));
 }
 
 /* ============================================================
@@ -850,7 +998,10 @@ function renderGridCurrent(){
    ============================================================ */
 const TRANS = [['fade','淡入淡出'],['slide','左右滑动'],['zoom','缩放'],['black','黑场'],['random','随机']];
 const SORTS = [['add','添加顺序'],['name','按名称'],['random','随机']];
-const FITS  = [['contain','完整显示'],['cover','铺满']];
+const FITS  = [['contain','完整'],['auto','智能'],['cover','铺满']];
+const FILLS = [['blur','模糊'],['edge','边缘延展'],['none','纯黑']];
+const PERS  = [['1','1 张'],['2','2 张'],['3','3 张'],['auto','自动']];
+const ORIENTS = [['auto','跟随系统'],['portrait','锁竖屏'],['landscape','锁横屏']];
 const COLORS = ['#ffffff','#f5e6c8','#ffd6a5','#a8d8ff','#c9f7d0','#ffc9de','#d9c9ff','#9a9aa4'];
 
 $$('.tab').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.p)));
@@ -954,10 +1105,16 @@ function syncUI(){
   const c = cfg.clock;
   $('#sInt').value = cfg.interval; $('#vInt').textContent = cfg.interval + 's';
   $('#sPlay').classList.toggle('on', cfg.playing);
-  $('#sBlur').classList.toggle('on', cfg.blur);
+  $('#sZoom').value = cfg.zoom; $('#vZoom').textContent = cfg.zoom + '%';
+  const pb = $('#segPer');
+  if (pb && pb.children.length) Array.from(pb.children).forEach(b => b.classList.toggle('on', b.dataset.v === cfg.perPage));
+  const fb = $('#segFill');
+  if (fb && fb.children.length) Array.from(fb.children).forEach(b => b.classList.toggle('on', b.dataset.v === cfg.fill));
   $('#sKB').classList.toggle('on', cfg.kb);
   $('#sInfo').classList.toggle('on', cfg.info);
   $('#sWake').classList.toggle('on', cfg.wake);
+  const ob = $('#segOrient');
+  if (ob && ob.children.length) Array.from(ob.children).forEach(b => b.classList.toggle('on', b.dataset.v === cfg.orient));
   $('#cShow').classList.toggle('on', c.show);
   $('#cGlass').classList.toggle('on', c.glass);
   $('#c24').classList.toggle('on', c.h24);
@@ -978,17 +1135,24 @@ function syncUI(){
 
 bindSeg('#segTrans', TRANS, 'trans', () => {});
 bindSeg('#segSort', SORTS, 'sort', () => { applySort(); showPhoto(0, false); renderGrid(); });
-bindSeg('#segFit', FITS, 'fit', () => { showPhoto(state.idx, false); });
+bindSeg('#segFit', FITS, 'fit', () => { resetView(); showPhoto(state.idx, false); });
+bindSeg('#segFill', FILLS, 'fill', () => { showPhoto(state.idx, false); });
+bindSeg('#segPer', PERS, 'perPage', () => { resetView(); showPhoto(state.idx, false); schedule(); });
+bindSeg('#segOrient', ORIENTS, 'orient', () => { applyOrientation(); });
 
+$('#sZoom').addEventListener('input', e => {
+  cfg.zoom = +e.target.value;
+  $('#vZoom').textContent = cfg.zoom + '%';
+  applyView(); saveCfg();
+});
 $('#sInt').addEventListener('input', e => {
   cfg.interval = +e.target.value;
   $('#vInt').textContent = cfg.interval + 's';
   saveCfg(); schedule();
 });
 bindSw('#sPlay', () => cfg.playing, v => { cfg.playing = v; schedule(); });
-bindSw('#sBlur', () => cfg.blur, v => { cfg.blur = v; showPhoto(state.idx, false); });
 bindSw('#sKB', () => cfg.kb, v => { cfg.kb = v; showPhoto(state.idx, false); });
-bindSw('#sInfo', () => cfg.info, v => { cfg.info = v; updateInfo(state.photos[state.idx]); });
+bindSw('#sInfo', () => cfg.info, v => { cfg.info = v; updateInfo(currentPage()); });
 bindSw('#sWake', () => cfg.wake, v => { cfg.wake = v; if (v) keepAwake(); });
 
 bindSw('#cShow',  () => cfg.clock.show,  v => { cfg.clock.show = v; tick(); });
@@ -1100,6 +1264,32 @@ function dataURLtoBlob(d){
 }
 
 /* ============================================================
+   屏幕方向锁定
+   ============================================================ */
+async function applyOrientation(){
+  const so = screen.orientation;
+  if (!so || !so.lock){
+    toast('这个浏览器不支持锁定方向，请用手机系统的「自动旋转」开关');
+    return;
+  }
+  if (cfg.orient === 'auto'){
+    try { await so.unlock(); toast('方向已放开'); } catch(e){}
+    return;
+  }
+  try {
+    // 锁方向要求页面处于全屏（已安装成 app 时通常直接可用）
+    if (!document.fullscreenElement){
+      try { await document.documentElement.requestFullscreen(); } catch(e){}
+    }
+    await so.lock(cfg.orient === 'portrait' ? 'portrait' : 'landscape');
+    toast(cfg.orient === 'portrait' ? '已锁定竖屏' : '已锁定横屏');
+  } catch(e){
+    toast('浏览器不允许锁定方向，请用手机系统的「自动旋转」开关');
+    cfg.orient = 'auto'; saveCfg(); syncUI();
+  }
+}
+
+/* ============================================================
    屏幕常亮
    ============================================================ */
 let wakeLock = null;
@@ -1112,6 +1302,14 @@ async function keepAwake(){
     }
   } catch(e){}
 }
+window.addEventListener('resize', () => {
+  if (!state.photos.length) return;
+  const page = currentPage();
+  layoutPage(layerEl[state.active], page, state.curCover);
+  applyView();
+  applyBg(page, state.curCover);
+});
+
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible'){ keepAwake(); tick(); }
 });
