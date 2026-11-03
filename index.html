@@ -59,7 +59,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#000;color:#
   display:none;pointer-events:none;cursor:grab;touch-action:none;background:transparent;
   filter:drop-shadow(0 8px 18px rgba(0,0,0,.45))}
 #pet.on{display:block;pointer-events:auto}
-#pet.dragging{cursor:grabbing;transform:scale(1.04)}
+#pet.dragging{cursor:grabbing;filter:drop-shadow(0 10px 22px rgba(0,0,0,.55)) brightness(1.06)}
 #dim{position:absolute;inset:0;background:#000;opacity:0;transition:opacity 2.5s;pointer-events:none;z-index:36}
 .c-time{font-size:var(--cs);line-height:1.02;font-weight:300;letter-spacing:.01em;
   font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
@@ -276,7 +276,7 @@ select option{background:#1c1c22}
 
 <script>
 "use strict";
-const VER = '2026-11-03.11';
+const VER = '2026-11-03.12';
 /* ============================================================
    图帧 —— 全屏图片 + 可自定义时钟
    ============================================================ */
@@ -1566,26 +1566,35 @@ function petThrow(vx, vy){
 /* 拖拽 / 甩出 / 点击 */
 (function(){
   const v = $('#pet');
-  let dragging = false, moved = false, sx = 0, sy = 0, ox = 0, oy = 0;
+  let dragging = false, moved = false;
+  let sx = 0, sy = 0, ox = 0, oy = 0;
   let lastX = 0, lastY = 0, lastT = 0, vx = 0, vy = 0;
-  v.addEventListener('pointerdown', e => {
+
+  const rect = () => v.getBoundingClientRect();
+
+  function start(e){
     if (!cfg.pet.on) return;
     cancelAnimationFrame(petRaf); petRaf = 0;
     dragging = true; moved = false;
-    v.setPointerCapture(e.pointerId);
-    const r = v.getBoundingClientRect();
+    const r = rect();
     ox = r.left; oy = r.top; sx = e.clientX; sy = e.clientY;
     lastX = e.clientX; lastY = e.clientY; lastT = performance.now();
     vx = 0; vy = 0;
     v.classList.add('dragging');
-    e.stopPropagation(); e.preventDefault();
-  });
-  v.addEventListener('pointermove', e => {
+    petToken++;                       // 取消排队中的切换，避免拖动中换片
+    try { v.pause(); } catch(err){}    // 冻住当前帧，不闪
+    e.preventDefault(); e.stopPropagation();
+  }
+
+  function move(e){
     if (!dragging) return;
     const dx = e.clientX - sx, dy = e.clientY - sy;
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
-    const nx = Math.max(0, Math.min(innerWidth - v.offsetWidth, ox + dx));
-    const ny = Math.max(0, Math.min(innerHeight - v.offsetHeight, oy + dy));
+    const r = rect();
+    const w = r.width || v.offsetWidth || 150;
+    const h = r.height || v.offsetHeight || 150;
+    const nx = Math.max(0, Math.min(window.innerWidth - w, ox + dx));
+    const ny = Math.max(0, Math.min(window.innerHeight - h, oy + dy));
     v.style.right = 'auto'; v.style.bottom = 'auto';
     v.style.left = nx + 'px'; v.style.top = ny + 'px';
     const now = performance.now();
@@ -1593,27 +1602,42 @@ function petThrow(vx, vy){
     vx = (e.clientX - lastX) / dt * 16;
     vy = (e.clientY - lastY) / dt * 16;
     lastX = e.clientX; lastY = e.clientY; lastT = now;
-    e.stopPropagation();
-  });
-  v.addEventListener('pointerup', e => {
+    e.preventDefault(); e.stopPropagation();
+  }
+
+  function end(e){
     if (!dragging) return;
     dragging = false;
     v.classList.remove('dragging');
+    const playing = v.play();
+    if (playing && playing.catch) playing.catch(() => {});
     if (moved){
       if (Math.hypot(vx, vy) > 2.2){
         petThrow(vx * 1.25, vy * 1.25);
         petPool().then(p => {
           if (p.drag.length) petPlay(p.drag[0].f, () => setTimeout(petCycle, 500));
+          else setTimeout(petCycle, 400);
         });
       } else {
-        const r = v.getBoundingClientRect();
+        const r = rect();
         cfg.pet.x = Math.round(r.left); cfg.pet.y = Math.round(r.top); saveCfg();
+        setTimeout(petCycle, 700);
       }
     } else {
       petPool().then(p => petPlay(petRand(p.click).f, () => setTimeout(petCycle, 400)));
     }
     e.stopPropagation();
+  }
+
+  v.addEventListener('pointerdown', start);
+  window.addEventListener('pointermove', move, { passive: false });
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', end);
+  // 关键：拦住 touch 事件，别让下面的舞台当成滑动切换
+  ['touchstart','touchmove','touchend','touchcancel'].forEach(t => {
+    v.addEventListener(t, ev => { ev.stopPropagation(); }, { passive: true });
   });
+  v.addEventListener('click', ev => ev.stopPropagation());
 })();
 
 /* ============================================================
