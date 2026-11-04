@@ -251,8 +251,8 @@ select option{background:#1c1c22}
       <div class="row"><div><div class="lab">显示宠物</div><div class="hint">素材 © PC2005-cloud/dsh-pet，禁止商用</div></div><button class="sw" id="pOn"></button></div>
       <div class="row"><div class="lab">可用区域</div><div id="petDbg" style="font-size:12px;color:#8b8b95">—</div></div>
       <div class="row"><div class="lab">大小</div><div style="display:flex;align-items:center;gap:9px">
-        <input type="range" id="pSize" min="80" max="700" step="10">
-        <input type="number" id="pSizeN" min="60" max="1200" step="10" style="width:76px;max-width:76px;text-align:center">
+        <input type="range" id="pSize" min="80" max="2000" step="10">
+        <input type="number" id="pSizeN" min="60" max="4000" step="10" style="width:76px;max-width:76px;text-align:center">
         <span style="font-size:12px;color:#8b8b95">px</span></div></div>
 
       <div class="sec-t">其他</div>
@@ -277,7 +277,7 @@ select option{background:#1c1c22}
 
 <script>
 "use strict";
-const VER = '2026-11-03.13';
+const VER = '2026-11-04.1';
 /* ============================================================
    图帧 —— 全屏图片 + 可自定义时钟
    ============================================================ */
@@ -1292,7 +1292,7 @@ function syncUI(){
   const _d = $('#petDbg');
   if (_d) _d.textContent = Math.round(_b.width) + ' × ' + Math.round(_b.height)
     + ' ｜ 视图 ' + window.innerWidth + ' × ' + window.innerHeight;
-  $('#pSize').value = Math.min(700, cfg.pet.size);
+  $('#pSize').value = Math.min(2000, cfg.pet.size);
   $('#pSizeN').value = cfg.pet.size;
   $('#sNight').classList.toggle('on', cfg.night.on);
   $('#nStart').value = cfg.night.start;
@@ -1341,9 +1341,9 @@ bindSw('#sPlay', () => cfg.playing, v => { cfg.playing = v; schedule(); });
 bindSw('#sKB', () => cfg.kb, v => { cfg.kb = v; showPhoto(state.idx, false); });
 bindSw('#pOn', () => cfg.pet.on, v => { cfg.pet.on = v; petSync(); });
 function setPetSize(n){
-  n = Math.max(60, Math.min(1200, isFinite(n) ? Math.round(n) : 150));
+  n = Math.max(60, Math.min(4000, isFinite(n) ? Math.round(n) : 150));
   cfg.pet.size = n;
-  $('#pSize').value = Math.min(700, n);
+  $('#pSize').value = Math.min(2000, n);
   $('#pSizeN').value = n;
   const v = $('#pet');
   if (v) v.style.width = n + 'px';
@@ -1538,6 +1538,12 @@ function stageBox(){
   return { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
 }
 
+/* 边界钳制：元素比舞台大时允许负区间，仍能拖动查看右侧/下侧 */
+function clampPos(v, span){
+  const lo = Math.min(0, span), hi = Math.max(0, span);
+  return Math.max(lo, Math.min(hi, v));
+}
+
 /* 甩出去：重力 + 碰边反弹 + 摩擦 */
 let petRaf = 0;
 function petThrow(vx, vy){
@@ -1555,18 +1561,20 @@ function petThrow(vx, vy){
     vy += G * dt;
     x += vx * dt; y += vy * dt;
     const W = box0.width, H = box0.height;
-    if (x < 0){ x = 0; vx = -vx * BOUNCE; }
-    if (x > W - w){ x = W - w; vx = -vx * BOUNCE; }
-    if (y < 0){ y = 0; vy = -vy * BOUNCE; }
-    if (y > H - h){
-      y = H - h;
+    const xlo = Math.min(0, W - w), xhi = Math.max(0, W - w);
+    const ylo = Math.min(0, H - h), yhi = Math.max(0, H - h);
+    if (x < xlo){ x = xlo; vx = -vx * BOUNCE; }
+    if (x > xhi){ x = xhi; vx = -vx * BOUNCE; }
+    if (y < ylo){ y = ylo; vy = -vy * BOUNCE; }
+    if (y > yhi){
+      y = yhi;
       vy = -vy * BOUNCE;
       if (Math.abs(vy) < 2.4) vy = 0;
       vx *= 0.94;
     }
     vx *= DRAG;
     v.style.left = x + 'px'; v.style.top = y + 'px';
-    if (Math.abs(vx) < 0.12 && Math.abs(vy) < 0.12 && y >= H - h - 0.5){
+    if (Math.abs(vx) < 0.12 && Math.abs(vy) < 0.12 && y >= yhi - 0.5){
       cfg.pet.x = Math.round(x); cfg.pet.y = Math.round(y); saveCfg();
       petRaf = 0;
       if (cfg.pet.on) setTimeout(petCycle, 600);
@@ -1607,8 +1615,8 @@ function petThrow(vx, vy){
     const r = rect(), box = stageBox();
     const w = r.width || v.offsetWidth || 150;
     const h = r.height || v.offsetHeight || 150;
-    const nx = Math.max(0, Math.min(box.width - w, ox + dx));
-    const ny = Math.max(0, Math.min(box.height - h, oy + dy));
+    const nx = clampPos(ox + dx, box.width - w);
+    const ny = clampPos(oy + dy, box.height - h);
     v.style.right = 'auto'; v.style.bottom = 'auto';
     v.style.left = nx + 'px'; v.style.top = ny + 'px';
     const now = performance.now();
